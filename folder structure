@@ -4,15 +4,15 @@ rhythm-reaction-trainer/
 ├─ assets/
 │  └─ click.wav
 ├─ docs/
-│  └─ demo.gif
+│  └─ demo.gif +
 ├─ src/ +
 │  ├─ main.js +
 │  ├─ audio.js +
-│  ├─ utils.js
+│  ├─ utils.js +
 │  └─ modes/ +
 │     ├─ beatclick.js +
-│     ├─ keypress.js
-│     └─ patternmemory.js
+│     ├─ keypress.js +
+│     └─ patternmemory.js +
 ├─ index.html +
 ├─ style.css +
 ├─ README.md +

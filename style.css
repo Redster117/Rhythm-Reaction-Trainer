@@ -16,9 +16,21 @@ body{
 }
 main{width:900px}
 header h1{margin:0 0 12px 0;font-weight:600}
-#controls{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-#mode-select button, #profile button{padding:8px 12px;border:1px solid #222;background:transparent;color:var(--accent);cursor:pointer}
-#username{padding:6px;border-radius:4px;border:1px solid #222;background:#0b0c0e;color:var(--accent)}
+#controls{display:grid;grid-template-columns:1fr 1.3fr;gap:12px;align-items:start;margin-bottom:12px}
+#mode-select{display:flex;gap:4px;flex-wrap:wrap}
+#mode-select button{padding:8px 12px;border:1px solid #222;background:transparent;color:var(--accent);cursor:pointer;border-radius:4px}
+#mode-select .mode-btn.active{background:#222}
+#profile{display:grid;gap:8px}
+#profile label{font-size:0.85rem;color:var(--muted);}
+#profile input,#profile select{padding:8px 10px;border-radius:6px;border:1px solid #222;background:#0b0c0e;color:var(--accent)}
+#profile button{padding:8px 12px;border-radius:6px;border:1px solid #222;background:transparent;color:var(--accent);cursor:pointer}
+#profile button:disabled{opacity:0.4;cursor:not-allowed}
+#profile-info{margin-bottom:12px;color:var(--accent);font-size:0.95rem}
+#keybind-panel{display:grid;gap:8px;padding:12px;border:1px solid #222;border-radius:8px;background:#10131a;margin-bottom:12px}
+.keybind-row{display:grid;grid-template-columns:60px 1fr;gap:8px;align-items:center}
+#keybind-panel input{width:100%;padding:8px;border-radius:6px;border:1px solid #222;background:#0b0c0e;color:var(--accent)}
 #game-canvas{display:block;width:100%;background:#0b0c0e;border:1px solid #222;border-radius:6px}
-#hud{display:flex;gap:16px;margin-top:8px;color:var(--muted)}
-#hud div{background:transparent;padding:6px 8px;border-radius:4px}
+#hud{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:12px;margin-top:8px;color:var(--muted)}
+#hud div{background:transparent;padding:10px 12px;border-radius:6px;border:1px solid #222}
+@media (max-width: 760px){main{width:100%;padding:0 12px}#controls{grid-template-columns:1fr}#mode-select{justify-content:center}#hud{grid-template-columns:1fr 1fr}}
+#message{color:#ffcc00;margin-bottom:12px;font-size:0.95rem}

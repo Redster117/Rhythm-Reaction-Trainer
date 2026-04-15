@@ -8,24 +8,110 @@
 </head>
 <body>
   <main id="app">
-    <header><h1>Rhythm Reaction Trainer</h1></header>
+    <header>
+      <h1>Rhythm Reaction Trainer</h1>
+      <div id="header-controls">
+        <button id="login-btn">Log in</button>
+        <button id="signup-btn">Sign Up</button>
+        <button id="settings-btn" aria-label="Settings">⚙️</button>
+      </div>
+    </header>
 
     <section id="controls">
       <div id="mode-select">
-        <button id="btn-beat">Beat-Click Trainer</button>
+        <button id="btn-beat" class="mode-btn active">Beat-Click Trainer</button>
+        <button id="btn-key" class="mode-btn">Key Press Trainer</button>
+        <button id="btn-pattern" class="mode-btn">Pattern Memory Trainer</button>
       </div>
       <div id="profile">
-        <input id="username" placeholder="Username" />
+        <select id="difficulty" aria-label="Difficulty">
+          <option value="noob">Noob</option>
+          <option value="ez">EZ</option>
+          <option value="veteran">Veteran</option>
+          <option value="experienced">Experienced</option>
+          <option value="expert">Expert</option>
+          <option value="pro">Pro</option>
+        </select>
         <button id="start-btn">Start</button>
       </div>
     </section>
 
-    <canvas id="game-canvas" width="800" height="500" aria-label="Game canvas"></canvas>
+    <div id="profile-info" aria-live="polite"></div>
 
-    <div id="hud" role="status">
-      <div id="score">Score: 0</div>
-      <div id="combo">Combo: 0</div>
-      <div id="last-judgement">Last: —</div>
+    <div id="game-container">
+      <canvas id="game-canvas" width="800" height="500" aria-label="Game canvas"></canvas>
+      <div id="hud" role="status">
+        <div id="score">Score: 0</div>
+        <div id="combo">Combo: 0</div>
+        <div id="last-judgement">Last: —</div>
+        <div id="accuracy">Accuracy: 100%</div>
+        <div id="precision">Precision: 0 ms</div>
+      </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="login-modal" class="modal" hidden>
+      <div class="modal-content">
+        <h2>Log in / Create Profile</h2>
+        <label for="username">Username</label>
+        <input id="username" placeholder="Username" aria-label="Username" />
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="Password" aria-label="Password" />
+        <div class="modal-buttons">
+          <button id="login-submit-btn">Log in</button>
+          <button id="login-cancel-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="settings-modal" class="modal" hidden>
+      <div class="modal-content">
+        <h2>Settings</h2>
+        <div id="keybind-panel">
+          <h3>Keybinds</h3>
+          <div class="keybind-row">
+            <label for="bind-a">A</label>
+            <input id="bind-a" maxlength="5" placeholder="KeyA" />
+          </div>
+          <div class="keybind-row">
+            <label for="bind-s">S</label>
+            <input id="bind-s" maxlength="5" placeholder="KeyS" />
+          </div>
+          <div class="keybind-row">
+            <label for="bind-d">D</label>
+            <input id="bind-d" maxlength="5" placeholder="KeyD" />
+          </div>
+          <div class="keybind-row">
+            <label for="bind-f">F</label>
+            <input id="bind-f" maxlength="5" placeholder="KeyF" />
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button id="save-settings-btn">Save</button>
+          <button id="cancel-settings-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="profile-modal" class="modal" hidden>
+      <div class="modal-content">
+        <h2>Profile: <span id="profile-username"></span></h2>
+        <div id="profile-stats">
+          <div class="stat-item">
+            <strong>Overall Best Score:</strong> <span id="overall-best"></span>
+          </div>
+          <div class="stat-item">
+            <strong>Total Plays:</strong> <span id="total-plays"></span>
+          </div>
+          <h3>Mode Statistics</h3>
+          <div id="mode-stats">
+            <!-- Will be populated by JS -->
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button id="close-profile-btn">Close</button>
+        </div>
+      </div>
     </div>
   </main>
 

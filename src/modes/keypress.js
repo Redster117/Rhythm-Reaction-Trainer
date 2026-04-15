@@ -1,46 +1,51 @@
 // src/modes/keypress.js
-// Simple Key-Press mode: shows a sequence of beats to press keys to.
-// This is a minimal scaffold for Sprint 2+; it uses the same judgement logic as beatclick.
+// Key-Press mode: displays labeled beat cues and requires matching key presses.
 
 import { getJudgement } from '../utils.js';
 
-export default function createKeyPressMode({ canvas, audioScheduler, onUpdateHUD, pattern = null, debug = false } = {}) {
+export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, difficulty = {}, keybinds = {}, pattern = null, debug = false } = {}) {
   const ctx = canvas.getContext('2d');
   let rafId = null;
-  let cues = []; // {beatTime, hit, id}
+  let cues = []; // {beatTime, spawnTime, hit, label, code}
   let score = 0;
   let combo = 0;
   let lastJudgement = '—';
-  const leadTime = 0.6;
+  let totalJudgements = 0;
+  let perfectCount = 0;
+  let goodCount = 0;
+  let totalOffset = 0;
 
-  // If no pattern provided, generate a simple 8-beat pattern at scheduler BPM
-  function generatePattern(startTime, count = 8) {
+  const leadTime = difficulty.leadTime || 0.6;
+  const beatCount = difficulty.patternBeats || 8;
+  const availableLabels = Object.keys(keybinds).length ? Object.keys(keybinds) : ['A', 'S', 'D', 'F'];
+
+  function generatePattern(startTime, count = beatCount) {
     const spb = audioScheduler.secondsPerBeat;
-    const arr = [];
+    const patternData = [];
     for (let i = 0; i < count; i++) {
-      arr.push(startTime + i * spb);
+      const label = availableLabels[i % availableLabels.length];
+      const code = keybinds[label] || `Key${label}`;
+      patternData.push({ beatTime: startTime + i * spb, label, code, spawnTime: startTime + i * spb - leadTime, hit: false });
     }
-    return arr;
+    return patternData;
   }
 
-  function spawnPattern(beatTimes) {
-    for (const bt of beatTimes) {
-      cues.push({ id: Math.random().toString(36).slice(2,9), beatTime: bt, spawnTime: bt - leadTime, hit: false });
-    }
+  function spawnPattern(patternData) {
+    cues = patternData.map((cue) => ({ ...cue }));
   }
 
-  function onBeat(beatTime) {
-    // For KeyPress mode we don't spawn on every metronome beat; spawn only when pattern exists.
-    // Keep this handler minimal; pattern spawn is done once at start.
+  function onBeat(_beatTime) {
+    // Do nothing; the pattern is pre-generated.
   }
 
   function start() {
-    // prepare pattern
     const now = audioScheduler.getCurrentTime();
     const startAt = now + 0.5;
-    const beatTimes = pattern ? pattern.map(offset => startAt + offset) : generatePattern(startAt, 8);
-    spawnPattern(beatTimes);
-
+    const patternData = pattern ? pattern.map((offset, index) => {
+      const label = availableLabels[index % availableLabels.length];
+      return { beatTime: startAt + offset, label, code: keybinds[label] || `Key${label}`, spawnTime: startAt + offset - leadTime, hit: false };
+    }) : generatePattern(startAt, beatCount);
+    spawnPattern(patternData);
     audioScheduler.onBeat(onBeat);
     rafId = requestAnimationFrame(render);
   }
@@ -50,83 +55,95 @@ export default function createKeyPressMode({ canvas, audioScheduler, onUpdateHUD
     rafId = null;
   }
 
-  function handleInput(eventTime) {
+  function updateStats(diff) {
+    const judgement = getJudgement(diff);
+    totalJudgements += 1;
+    totalOffset += Math.abs(diff);
+    if (judgement.label === 'Perfect') perfectCount += 1;
+    if (judgement.label === 'Good') goodCount += 1;
+    if (judgement.label === 'Miss') combo = 0;
+    return judgement;
+  }
+
+  function handleInput(eventTime, keyCode) {
     let nearest = null;
     let bestDiff = Infinity;
     for (const cue of cues) {
-      if (cue.hit) continue;
-      const diff = eventTime - cue.beatTime;
-      const abs = Math.abs(diff);
-      if (abs < bestDiff && abs <= 0.2) {
-        bestDiff = abs;
+      if (cue.hit || cue.code !== keyCode) continue;
+      const diff = Math.abs(eventTime - cue.beatTime);
+      if (diff < bestDiff && diff <= 0.2) {
+        bestDiff = diff;
         nearest = cue;
       }
     }
     if (!nearest) {
       combo = 0;
       lastJudgement = 'Miss';
-      onUpdateHUD({ score, combo, lastJudgement });
+      onUpdateHUD({ score, combo, lastJudgement, accuracy: totalJudgements ? Math.round(((perfectCount + goodCount) / totalJudgements) * 100) : 0, precision: totalJudgements ? Math.round((totalOffset / totalJudgements) * 1000) : 0 });
       return;
     }
 
-    const judgement = getJudgement(eventTime - nearest.beatTime);
+    const diff = eventTime - nearest.beatTime;
+    const judgement = updateStats(diff);
     nearest.hit = true;
+    lastJudgement = judgement.label;
     if (judgement.points > 0) {
       score += judgement.points;
       combo += 1;
     } else {
       combo = 0;
     }
-    lastJudgement = judgement.label;
-    if (debug) console.log('keypress hit diff', (eventTime - nearest.beatTime).toFixed(3), judgement.label);
-    onUpdateHUD({ score, combo, lastJudgement, judgementCss: judgement.css });
+    onUpdateHUD({ score, combo, lastJudgement, accuracy: Math.round(((perfectCount + goodCount) / totalJudgements) * 100), precision: Math.round((totalOffset / totalJudgements) * 1000) });
   }
 
-  // input
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space' || e.code === 'KeyK' || e.code === 'Enter') {
+    if (['Space', 'Enter', 'Backspace'].includes(e.code)) return;
+    const now = audioScheduler.getCurrentTime();
+    if (Object.values(keybinds).includes(e.code)) {
       e.preventDefault();
-      handleInput(audioScheduler.getCurrentTime());
+      handleInput(now, e.code);
     }
-  });
-
-  canvas.addEventListener('pointerdown', () => {
-    handleInput(audioScheduler.getCurrentTime());
   });
 
   function render() {
     const w = canvas.width;
     const h = canvas.height;
-    ctx.clearRect(0,0,w,h);
-
+    ctx.clearRect(0, 0, w, h);
     const now = audioScheduler.getCurrentTime();
 
-    // Draw a simple timeline of upcoming cues
     ctx.fillStyle = '#e6eef6';
+    ctx.font = '18px system-ui';
+    ctx.fillText('Key-Press Rhythm Trainer', 12, 24);
     ctx.font = '14px system-ui';
-    ctx.fillText('Key-Press Mode', 12, 20);
+    ctx.fillText('Press the key shown inside the circle at the beat.', 12, 46);
 
     for (let i = cues.length - 1; i >= 0; i--) {
       const cue = cues[i];
       const t = (now - cue.spawnTime) / (cue.beatTime - cue.spawnTime || 1);
-      if (now > cue.beatTime + 0.3) {
+      if (now > cue.beatTime + 0.4) {
         if (!cue.hit) {
           combo = 0;
           lastJudgement = 'Miss';
-          onUpdateHUD({ score, combo, lastJudgement });
+          totalJudgements += 1;
+          onUpdateHUD({ score, combo, lastJudgement, accuracy: totalJudgements ? Math.round(((perfectCount + goodCount) / totalJudgements) * 100) : 0, precision: totalJudgements ? Math.round((totalOffset / totalJudgements) * 1000) : 0 });
         }
-        cues.splice(i,1);
+        cues.splice(i, 1);
         continue;
       }
 
-      const x = w * 0.1 + (1 - Math.min(Math.max(t,0),1)) * (w * 0.8);
+      const progress = Math.min(Math.max(t, 0), 1);
+      const x = w * 0.1 + (1 - progress) * (w * 0.8);
       const y = h / 2;
       ctx.beginPath();
-      ctx.arc(x, y, 18, 0, Math.PI*2);
+      ctx.arc(x, y, 28, 0, Math.PI * 2);
       ctx.fillStyle = cue.hit ? 'rgba(126,252,106,0.9)' : 'rgba(34,193,195,0.9)';
       ctx.fill();
+      ctx.strokeStyle = cue.hit ? '#8de6a3' : '#72d4ff';
+      ctx.lineWidth = 3;
+      ctx.stroke();
       ctx.fillStyle = '#071226';
-      ctx.fillText(Math.max(0, (cue.beatTime - now)).toFixed(2), x - 12, y + 6);
+      ctx.font = '18px system-ui';
+      ctx.fillText(cue.label, x - 7, y + 7);
     }
 
     rafId = requestAnimationFrame(render);

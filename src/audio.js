@@ -36,9 +36,12 @@ export class AudioScheduler {
     scheduler();
   }
 
-  stopScheduler() {
+  async stopScheduler() {
     this.isRunning = false;
     if (this._timerID) clearTimeout(this._timerID);
+    if (this.audioCtx && this.audioCtx.state === 'running') {
+      await this.audioCtx.suspend();
+    }
   }
 
   onBeat(callback) {
