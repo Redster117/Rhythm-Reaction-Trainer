@@ -1,12 +1,12 @@
 # Rhythm-Reaction-Trainer
 
-## Sprint 1 goal
-Deliver a playable Beat‑Click prototype with a Web Audio timing engine, judgement logic, HUD, and a minimalist UI.
-
 ## How to run (local)
-1. Clone the repo.
-2. Open `index.html` in a modern desktop browser (Chrome/Edge/Firefox).
-3. Click the page to start audio (required to resume AudioContext).
+1. Create a copy of the Rhythym Reaction Trainer.
+2. Open terminal and type the commands in order:
+    - npm install -g serve
+    - npm fund (Optional)
+    - serve . -l 8000
+3. Once done you will get a notification saying
 
 ## Acceptance criteria
 - Beat‑Click spawns cues in sync with audio using `AudioContext.currentTime`.
