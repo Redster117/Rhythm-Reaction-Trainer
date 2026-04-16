@@ -68,7 +68,7 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
       ctx.globalAlpha = opacity;
       ctx.beginPath();
 
-      // Color based on hit status
+      // olour based on hit status
       if (c.hit) {
         ctx.strokeStyle = '#00ff00'; // green for hit
       } else if (timeSinceBeat > 0) {

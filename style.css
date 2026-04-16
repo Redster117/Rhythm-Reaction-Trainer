@@ -11,7 +11,7 @@ body{
   background:var(--bg);
   color:var(--accent);
   display:flex;
-  justify-content:center;
+  justify-content:left;
   padding:20px;
 }
 main{width:900px}
@@ -33,4 +33,90 @@ header h1{margin:0 0 12px 0;font-weight:600}
 #hud{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:12px;margin-top:8px;color:var(--muted)}
 #hud div{background:transparent;padding:10px 12px;border-radius:6px;border:1px solid #222}
 @media (max-width: 760px){main{width:100%;padding:0 12px}#controls{grid-template-columns:1fr}#mode-select{justify-content:center}#hud{grid-template-columns:1fr 1fr}}
-#message{color:#ffcc00;margin-bottom:12px;font-size:0.95rem}
+#message{color:#ffee00;margin-bottom:12px;font-size:0.95rem}
+
+.modal {
+  position: fixed;
+  right: 45px;
+  top: 45px;
+  background: var(--bg);
+  border: 1px solid #222;
+  border-radius: 8px;
+  z-index: 1000;
+  max-width: 800px;
+  width: 90%;
+}
+
+.modal-content {
+  padding: 20px;
+}
+
+.modal-content h2 {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.modal-content label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+.modal-content input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 12px;
+  border: 1px solid #222;
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--accent);
+  box-sizing: border-box;
+  font-size: 1.25rem;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.modal-buttons button {
+  padding: 8px 16px;
+  border: 1px solid #222;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.modal-buttons button:hover {
+  background: #222;
+}
+
+.error-message {
+  color: #ff6b6b;
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+}
+
+.stat-item {
+  margin-bottom: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+th, td {
+  border: 1px solid #222;
+  padding: 4px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+th {
+  background: var(--panel);
+}

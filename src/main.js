@@ -25,16 +25,11 @@ const passwordInput = document.getElementById('password');
 const difficultySelect = document.getElementById('difficulty');
 const loginModal = document.getElementById('login-modal');
 const settingsModal = document.getElementById('settings-modal');
-const profileModal = document.getElementById('profile-modal');
 const loginSubmitBtn = document.getElementById('login-submit-btn');
 const loginCancelBtn = document.getElementById('login-cancel-btn');
+const signupCancelBtn = document.getElementById('signup-cancel-btn');
 const saveSettingsBtn = document.getElementById('save-settings-btn');
 const cancelSettingsBtn = document.getElementById('cancel-settings-btn');
-const closeProfileBtn = document.getElementById('close-profile-btn');
-const profileUsername = document.getElementById('profile-username');
-const overallBest = document.getElementById('overall-best');
-const totalPlays = document.getElementById('total-plays');
-const modeStatsDiv = document.getElementById('mode-stats');
 const bindInputs = {
   A: document.getElementById('bind-a'),
   S: document.getElementById('bind-s'),
@@ -57,6 +52,21 @@ let currentUser = null;
 let currentPasswordHash = null;
 let currentKeybinds = { ...DEFAULT_KEYBINDS };
 let currentProgress = { bestScore: 0, totalPlays: 0, modeStats: {} };
+let statsDisplayed = false;
+
+const signupModal = document.getElementById('signup-modal');
+const signupUsernameInput = document.getElementById('signup-username');
+const signupPasswordInput = document.getElementById('signup-password');
+const signupConfirmPasswordInput = document.getElementById('signup-confirm-password');
+const signupSubmitBtn = document.getElementById('signup-submit-btn');
+const signupError = document.getElementById('signup-error');
+const accountPanel = document.getElementById('account-panel');
+const logoutBtn = document.getElementById('logout-btn');
+const resetStatsBtn = document.getElementById('reset-stats-btn');
+const resetBeatBtn = document.getElementById('reset-beat-btn');
+const resetKeyBtn = document.getElementById('reset-key-btn');
+const resetPatternBtn = document.getElementById('reset-pattern-btn');
+const deleteAccountBtn = document.getElementById('delete-account-btn');
 
 function arrayBufferToHex(buffer) {
   return Array.from(new Uint8Array(buffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -106,6 +116,14 @@ function validateUsername(username) {
   return /^[a-zA-Z0-9_-]{3,16}$/.test(username);
 }
 
+function validatePassword(password) {
+  return password.length >= 8 &&
+         /[a-z]/.test(password) &&
+         /[A-Z]/.test(password) &&
+         /\d/.test(password) &&
+         /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+}
+
 function showMessage(message, isError = false) {
   profileInfo.textContent = message;
   profileInfo.style.color = isError ? '#ff6b6b' : '#9aa0a6';
@@ -119,60 +137,159 @@ function updateProfileInfo() {
   }
 }
 
-function updateHeaderControls() {
-  if (currentUser) {
-    loginBtn.textContent = currentUser;
-    loginBtn.onclick = showProfileModal;
+function toggleStatsDisplay() {
+  if (statsDisplayed) {
+    updateProfileInfo();
+    statsDisplayed = false;
   } else {
-    loginBtn.textContent = 'Log in';
-    loginBtn.onclick = showLoginModal;
+    displayStats();
+    statsDisplayed = true;
   }
 }
 
-function showLoginModal() {
-  loginModal.hidden = false;
-  usernameInput.focus();
+function displayStats() {
+  const totalPlays = currentProgress.totalPlays || 0;
+  const mostPlayedMode = getMostPlayedMode();
+  const modeHighScores = getModeHighScores();
+  profileInfo.innerHTML = `
+    <strong>Stats for ${currentUser}:</strong><br>
+    Total Plays: ${totalPlays}<br>
+    Most Played Mode: ${mostPlayedMode}<br>
+    <strong>High Scores per Mode:</strong><br>
+    Beat: ${modeHighScores.beat}<br>
+    Key: ${modeHighScores.key}<br>
+    Pattern: ${modeHighScores.pattern}<br>
+    <button id="view-detailed-stats">View Detailed Stats</button>
+  `;
+  setTimeout(() => {
+    document.getElementById('view-detailed-stats').onclick = showDetailedStats;
+  }, 0);
 }
 
-function hideLoginModal() {
-  loginModal.hidden = true;
-  usernameInput.value = '';
-  passwordInput.value = '';
+function getMostPlayedMode() {
+  let maxPlays = 0;
+  let mode = 'None';
+  for (const m in currentProgress.modeStats) {
+    let total = 0;
+    for (const diff in currentProgress.modeStats[m]) {
+      total += currentProgress.modeStats[m][diff].plays || 0;
+    }
+    if (total > maxPlays) {
+      maxPlays = total;
+      mode = m.charAt(0).toUpperCase() + m.slice(1);
+    }
+  }
+  return mode;
 }
 
-function showSettingsModal() {
-  loadKeybindInputs();
-  settingsModal.hidden = false;
+function getModeHighScores() {
+  const result = { beat: 0, key: 0, pattern: 0 };
+  for (const mode in result) {
+    let max = 0;
+    for (const diff in currentProgress.modeStats[mode] || {}) {
+      max = Math.max(max, currentProgress.modeStats[mode][diff].bestScore || 0);
+    }
+    result[mode] = max;
+  }
+  return result;
 }
 
-function hideSettingsModal() {
-  settingsModal.hidden = true;
+function showDetailedStats() {
+  profileInfo.innerHTML = `
+    <strong>Detailed Stats for ${currentUser}:</strong><br>
+    <select id="mode-select-stats">
+      <option value="beat">Beat</option>
+      <option value="key">Key</option>
+      <option value="pattern">Pattern</option>
+    </select>
+    <select id="sort-select">
+      <option value="accuracy">Accuracy</option>
+      <option value="precision">Precision</option>
+      <option value="combo">Combo</option>
+      <option value="perfects">Perfects</option>
+    </select>
+    <select id="order-select">
+      <option value="desc">High to Low</option>
+      <option value="asc">Low to High</option>
+    </select>
+    <button id="apply-sort">Apply</button>
+    <div id="stats-details"></div>
+    <button id="back-to-summary">Back to Summary</button>
+  `;
+  document.getElementById('apply-sort').onclick = updateDetailedStats;
+  document.getElementById('back-to-summary').onclick = () => displayStats();
+  updateDetailedStats();
 }
 
-function hideProfileModal() {
-  profileModal.hidden = true;
-}
-
-function showProfileModal() {
-  if (!currentUser) return;
-  profileUsername.textContent = currentUser;
-  overallBest.textContent = currentProgress.bestScore || 0;
-  totalPlays.textContent = currentProgress.totalPlays || 0;
-  
-  modeStatsDiv.innerHTML = '';
-  const modes = ['beat', 'key', 'pattern'];
-  modes.forEach(mode => {
-    const stats = currentProgress.modeStats[mode] || { bestScore: 0, plays: 0, accuracy: 0 };
-    const div = document.createElement('div');
-    div.className = 'stat-item';
-    div.innerHTML = `
-      <strong>${mode.charAt(0).toUpperCase() + mode.slice(1)} Mode:</strong><br>
-      Best Score: ${stats.bestScore}, Plays: ${stats.plays}, Avg Accuracy: ${stats.accuracy}%
-    `;
-    modeStatsDiv.appendChild(div);
+function updateDetailedStats() {
+  const mode = document.getElementById('mode-select-stats').value;
+  const sortBy = document.getElementById('sort-select').value;
+  const order = document.getElementById('order-select').value;
+  const stats = [];
+  for (const diff in currentProgress.modeStats[mode] || {}) {
+    const s = currentProgress.modeStats[mode][diff];
+    stats.push({
+      difficulty: diff,
+      accuracy: s.accuracy || 0,
+      precision: s.bestPrecision || Infinity,
+      combo: s.bestCombo || 0,
+      perfects: s.totalPerfects || 0,
+      plays: s.plays || 0
+    });
+  }
+  stats.sort((a, b) => {
+    let valA = a[sortBy];
+    let valB = b[sortBy];
+    if (sortBy === 'precision') {
+      valA = valA === Infinity ? -1 : valA;
+      valB = valB === Infinity ? -1 : valB;
+    }
+    if (order === 'desc') {
+      return valB - valA;
+    } else {
+      return valA - valB;
+    }
   });
-  
-  profileModal.hidden = false;
+  let html = '<table><tr><th>Difficulty</th><th>Plays</th><th>Accuracy</th><th>Best Precision</th><th>Best Combo</th><th>Total Perfects</th></tr>';
+  stats.forEach(s => {
+    html += `<tr><td>${s.difficulty}</td><td>${s.plays}</td><td>${s.accuracy}%</td><td>${s.precision === Infinity ? 'N/A' : s.precision + 'ms'}</td><td>${s.combo}</td><td>${s.perfects}</td></tr>`;
+  });
+  html += '</table>';
+  document.getElementById('stats-details').innerHTML = html;
+}
+
+function updateHeaderControls() {
+  if (currentUser) {
+    loginBtn.textContent = currentUser;
+    loginBtn.onclick = toggleStatsDisplay;
+    signupBtn.style.display = 'none';  // ← Sign up button hidden here
+  } else {
+    loginBtn.textContent = 'Log in';
+    loginBtn.onclick = toggleLoginModal;
+    signupBtn.style.display = 'inline-block';  // ← Sign up button shown here
+  }
+}
+
+function toggleLoginModal() {
+  loginModal.hidden = !loginModal.hidden;
+  if (!loginModal.hidden) {
+    settingsModal.hidden = true;
+    signupModal.hidden = true;
+    usernameInput.focus();
+  } else {
+    usernameInput.value = '';
+    passwordInput.value = '';
+  }
+}
+
+function toggleSettingsModal() {
+  settingsModal.hidden = !settingsModal.hidden;
+  if (!settingsModal.hidden) {
+    loginModal.hidden = true;
+    signupModal.hidden = true;
+    loadKeybindInputs();
+    accountPanel.hidden = !currentUser;
+  }
 }
 
 function loadKeybindInputs() {
@@ -193,20 +310,26 @@ function saveUserData() {
   setStoredUsers(users);
 }
 
-function saveProgress(score, accuracy) {
+function saveProgress(score, accuracy, combo, perfects, precision) {
   if (!currentUser) return;
   currentProgress.totalPlays += 1;
   currentProgress.bestScore = Math.max(currentProgress.bestScore || 0, score);
   
-  // Update mode stats
+  const difficulty = difficultySelect.value;
   if (!currentProgress.modeStats[selectedMode]) {
-    currentProgress.modeStats[selectedMode] = { bestScore: 0, plays: 0, totalAccuracy: 0 };
+    currentProgress.modeStats[selectedMode] = {};
   }
-  const modeStats = currentProgress.modeStats[selectedMode];
+  if (!currentProgress.modeStats[selectedMode][difficulty]) {
+    currentProgress.modeStats[selectedMode][difficulty] = { bestScore: 0, plays: 0, totalAccuracy: 0, accuracy: 0, bestCombo: 0, totalPerfects: 0, bestPrecision: Infinity };
+  }
+  const modeStats = currentProgress.modeStats[selectedMode][difficulty];
   modeStats.plays += 1;
   modeStats.bestScore = Math.max(modeStats.bestScore, score);
   modeStats.totalAccuracy += accuracy;
   modeStats.accuracy = Math.round(modeStats.totalAccuracy / modeStats.plays);
+  modeStats.bestCombo = Math.max(modeStats.bestCombo, combo);
+  modeStats.totalPerfects += perfects;
+  modeStats.bestPrecision = Math.min(modeStats.bestPrecision, precision);
   
   saveUserData();
   updateProfileInfo();
@@ -227,14 +350,8 @@ async function loginUser() {
   const passwordHash = await hashPassword(password);
   const users = getStoredUsers();
   if (!users[username]) {
-    currentProgress = { bestScore: 0, totalPlays: 0, modeStats: {} };
-    users[username] = {
-      passwordHash,
-      keybinds: { ...DEFAULT_KEYBINDS },
-      progress: encryptText(JSON.stringify(currentProgress), passwordHash)
-    };
-    setStoredUsers(users);
-    showMessage(`Profile created: ${username}.`);
+    showMessage('Username not found. Please sign up first.', true);
+    return;
   } else if (users[username].passwordHash !== passwordHash) {
     showMessage('Incorrect password.', true);
     return;
@@ -248,7 +365,59 @@ async function loginUser() {
   currentPasswordHash = passwordHash;
   updateHeaderControls();
   updateProfileInfo();
-  hideLoginModal();
+  toggleLoginModal();
+}
+
+async function signupUser() {
+  const username = signupUsernameInput.value.trim();
+  const password = signupPasswordInput.value;
+  const confirmPassword = signupConfirmPasswordInput.value;
+  if (!validateUsername(username)) {
+    showMessage('Username must be 3-16 letters, numbers, - or _.',  true);
+    return;
+  }
+  if (!validatePassword(password)) {
+    showMessage('Password must be at least 8 characters with upper, lower, number, and special character.', true);
+    return;
+  }
+  if (password !== confirmPassword) {
+    showMessage('Passwords do not match.', true);
+    return;
+  }
+
+  const passwordHash = await hashPassword(password);
+  const users = getStoredUsers();
+  if (users[username]) {
+    showMessage('Username already exists.', true);
+    return;
+  }
+
+  currentProgress = { bestScore: 0, totalPlays: 0, modeStats: {} };
+  users[username] = {
+    passwordHash,
+    keybinds: { ...DEFAULT_KEYBINDS },
+    progress: encryptText(JSON.stringify(currentProgress), passwordHash)
+  };
+  setStoredUsers(users);
+  currentUser = username;
+  currentPasswordHash = passwordHash;
+  updateHeaderControls();
+  updateProfileInfo();
+  toggleSignupModal();
+  showMessage(`Account created: ${username}.`);
+}
+
+function toggleSignupModal() {
+  signupModal.hidden = !signupModal.hidden;
+  if (!signupModal.hidden) {
+    loginModal.hidden = true;
+    settingsModal.hidden = true;
+    signupUsernameInput.focus();
+  } else {
+    signupUsernameInput.value = '';
+    signupPasswordInput.value = '';
+    signupConfirmPasswordInput.value = '';
+  }
 }
 
 function stopGame() {
@@ -278,34 +447,98 @@ Object.keys(modeButtons).forEach((mode) => {
   });
 });
 
-loginBtn.addEventListener('click', showLoginModal);
-signupBtn.addEventListener('click', showLoginModal);
-settingsBtn.addEventListener('click', showSettingsModal);
+signupBtn.onclick = toggleSignupModal;
+settingsBtn.onclick = toggleSettingsModal;
 loginSubmitBtn.addEventListener('click', loginUser);
-loginCancelBtn.addEventListener('click', hideLoginModal);
+loginCancelBtn.addEventListener('click', () => { toggleLoginModal(); });
 saveSettingsBtn.addEventListener('click', () => {
   Object.keys(bindInputs).forEach((label) => {
     const value = bindInputs[label].value.trim().toUpperCase();
     currentKeybinds[label] = value.startsWith('KEY') ? value : `Key${value}`;
   });
   saveUserData();
-  hideSettingsModal();
-  showMessage('Settings saved.');
+  showMessage('Keybinds saved.');
 });
 cancelSettingsBtn.addEventListener('click', () => {
   if (currentUser) {
     loadKeybindInputs();
   }
-  hideSettingsModal();
+  toggleSettingsModal();
 });
-closeProfileBtn.addEventListener('click', hideProfileModal);
+
+signupSubmitBtn.addEventListener('click', signupUser);
+signupCancelBtn.addEventListener('click', () => { toggleSignupModal(); });
+
+logoutBtn.addEventListener('click', () => {
+  currentUser = null;
+  currentPasswordHash = null;
+  currentProgress = { bestScore: 0, totalPlays: 0, modeStats: {} };
+  currentKeybinds = { ...DEFAULT_KEYBINDS };
+  updateHeaderControls();
+  updateProfileInfo();
+  toggleSettingsModal();
+  showMessage('Logged out.');
+});
+
+resetStatsBtn.addEventListener('click', () => {
+  if (!confirm('Are you sure you want to reset all stats?')) return;
+  currentProgress = { bestScore: 0, totalPlays: 0, modeStats: {} };
+  saveUserData();
+  updateProfileInfo();
+  showMessage('All stats reset.');
+});
+
+resetBeatBtn.addEventListener('click', () => {
+  if (!confirm('Are you sure you want to reset beat mode stats?')) return;
+  if (currentProgress.modeStats.beat) {
+    currentProgress.modeStats.beat = {};
+  }
+  saveUserData();
+  updateProfileInfo();
+  showMessage('Beat mode stats reset.');
+});
+
+resetKeyBtn.addEventListener('click', () => {
+  if (!confirm('Are you sure you want to reset key mode stats?')) return;
+  if (currentProgress.modeStats.key) {
+    currentProgress.modeStats.key = {};
+  }
+  saveUserData();
+  updateProfileInfo();
+  showMessage('Key mode stats reset.');
+});
+
+resetPatternBtn.addEventListener('click', () => {
+  if (!confirm('Are you sure you want to reset pattern mode stats?')) return;
+  if (currentProgress.modeStats.pattern) {
+    currentProgress.modeStats.pattern = {};
+  }
+  saveUserData();
+  updateProfileInfo();
+  showMessage('Pattern mode stats reset.');
+});
+
+deleteAccountBtn.addEventListener('click', () => {
+  if (!confirm('Are you sure you want to delete your account? This cannot be undone.')) return;
+  const users = getStoredUsers();
+  delete users[currentUser];
+  setStoredUsers(users);
+  currentUser = null;
+  currentPasswordHash = null;
+  currentProgress = { bestScore: 0, totalPlays: 0, modeStats: {} };
+  currentKeybinds = { ...DEFAULT_KEYBINDS };
+  updateHeaderControls();
+  updateProfileInfo();
+  toggleSettingsModal();
+  showMessage('Account deleted.');
+});
 
 // Close modals on escape key and handle backspace
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
-    hideLoginModal();
-    hideSettingsModal();
-    hideProfileModal();
+    loginModal.hidden = true;
+    settingsModal.hidden = true;
+    signupModal.hidden = true;
   }
   if (e.code === 'Backspace' && isGameRunning) {
     e.preventDefault();
@@ -328,6 +561,7 @@ startBtn.addEventListener('click', async () => {
   audioScheduler = new AudioScheduler();
   audioScheduler.setBPM(difficulty.bpm);
   await audioScheduler.init();
+
 
   switch (selectedMode) {
     case 'beat':
@@ -355,6 +589,7 @@ startBtn.addEventListener('click', async () => {
       break;
   }
 
+
   gameInstance.start();
 });
 
@@ -370,7 +605,7 @@ function updateHUD({ score, combo, lastJudgement, accuracy, precision }) {
   }
   // Save progress on each update for mode stats
   if (currentUser && accuracy !== undefined) {
-    saveProgress(score, accuracy);
+    saveProgress(score, accuracy, combo, 0, precision);
   }
 }
 
