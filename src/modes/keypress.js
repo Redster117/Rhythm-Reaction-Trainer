@@ -21,7 +21,7 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
   // Map keybinds to labels (A -> KeyA, etc)
   let availableLabels = Object.keys(keybinds).length ? Object.keys(keybinds) : ['A', 'S', 'D', 'F'];
   
-  // Randomize order for medium/hard difficulties
+  // Randomise order for medium/hard difficulties
   if ((difficultyLevel === 'veteran' || difficultyLevel === 'experienced' || difficultyLevel === 'expert' || difficultyLevel === 'pro') && Math.random() > 0.5) {
     availableLabels = availableLabels.slice().sort(() => Math.random() - 0.5);
   }
@@ -267,7 +267,7 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     if (cues.length === 0 && totalJudgements > 0 && !gameEnded) {
       gameEnded = true;
       if (onGameEnd) {
-        setTimeout(() => onGameEnd(), 500);
+        setTimeout(() => onGameEnd(), 1000);
       }
     }
 

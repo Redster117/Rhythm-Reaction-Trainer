@@ -1,3 +1,4 @@
+// src/main.js
 import { AudioScheduler } from './audio.js';
 import { startBeatClick } from './modes/beatclick.js';
 import startKeyPress from './modes/keypress.js';
@@ -121,7 +122,7 @@ function validatePassword(password) {
          /[a-z]/.test(password) &&
          /[A-Z]/.test(password) &&
          /\d/.test(password) &&
-         /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+         /[!@#$%^&*()_+\-={};':"\\|,.<>\/?]/.test(password);
 }
 
 function showMessage(message, isError = false) {
@@ -197,8 +198,7 @@ function getModeHighScores() {
 function showDetailedStats() {
   profileInfo.innerHTML = `
     <strong>Detailed Stats for ${currentUser}:</strong><br>
-    <select id="mode-select-stats">
-      <option value="beat">Beat</option>
+    <select id="mode-select-stats"><option value="beat">Beat</option>
       <option value="key">Key</option>
       <option value="pattern">Pattern</option>
     </select>
@@ -261,11 +261,11 @@ function updateHeaderControls() {
   if (currentUser) {
     loginBtn.textContent = currentUser;
     loginBtn.onclick = toggleStatsDisplay;
-    signupBtn.style.display = 'none';  // ← Sign up button hidden here
+    signupBtn.style.display = 'none';
   } else {
     loginBtn.textContent = 'Log in';
     loginBtn.onclick = toggleLoginModal;
-    signupBtn.style.display = 'inline-block';  // ← Sign up button shown here
+    signupBtn.style.display = 'inline-block';
   }
 }
 
@@ -421,11 +421,33 @@ function toggleSignupModal() {
 
 function stopGame() {
   if (!isGameRunning) return;
+
+  // Attempt to persist final stats from the running game instance before stopping
+  try {
+    if (gameInstance && typeof gameInstance.getState === 'function') {
+      const st = gameInstance.getState();
+      if (st) {
+        const score = st.score || 0;
+        const combo = st.combo || 0;
+        const totals = st.totals || {};
+        const perfects = totals.perfectCount || 0;
+        const totalJudgements = totals.totalJudgements || 0;
+        const totalOffset = totals.totalOffset || 0;
+        const accuracy = totalJudgements ? Math.round(((totals.perfectCount || 0) + (totals.goodCount || 0)) / totalJudgements * 100) : 0;
+        const precision = totalJudgements ? Math.round((totalOffset / totalJudgements) * 1000) : 0;
+        // Save progress for this run
+        saveProgress(score, accuracy, combo, perfects, precision);
+      }
+    }
+  } catch (err) {
+    // ignore errors while trying to persist
+  }
+
   if (gameInstance && gameInstance.stop) {
     gameInstance.stop();
   }
   if (audioScheduler) {
-    audioScheduler.stopScheduler();
+    audioScheduler.stopScheduler && audioScheduler.stopScheduler();
   }
   isGameRunning = false;
   Object.values(modeButtons).forEach((btn) => {
@@ -450,14 +472,16 @@ signupBtn.onclick = toggleSignupModal;
 settingsBtn.onclick = toggleSettingsModal;
 loginSubmitBtn.addEventListener('click', loginUser);
 loginCancelBtn.addEventListener('click', () => { toggleLoginModal(); });
+
 saveSettingsBtn.addEventListener('click', () => {
   Object.keys(bindInputs).forEach((label) => {
     const value = bindInputs[label].value.trim().toUpperCase();
-    currentKeybinds[label] = value.startsWith() ? value : `${value}`;
+    currentKeybinds[label] = value.length ? value : DEFAULT_KEYBINDS[label];
   });
   saveUserData();
   showMessage('Keybinds saved.');
 });
+
 cancelSettingsBtn.addEventListener('click', () => {
   if (currentUser) {
     loadKeybindInputs();
@@ -532,7 +556,7 @@ deleteAccountBtn.addEventListener('click', () => {
   showMessage('Account deleted.');
 });
 
-// Close modals on escape key and handle backspace
+// Close modals on escape and handle backspace to stop
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape') {
     loginModal.hidden = true;
@@ -561,38 +585,41 @@ startBtn.addEventListener('click', async () => {
   audioScheduler.setBPM(difficulty.bpm);
   await audioScheduler.init();
 
+const difficultyWithLevel = { ...difficulty, level: difficultySelect.value };
 
-  switch (selectedMode) {
-    case 'beat':
-      gameInstance = startBeatClick(audioScheduler, canvas, {
-        onUpdateHUD: updateHUD,
-        difficulty: difficulty,
-        onGameEnd: stopGame
-      });
-      break;
-    case 'key':
-      gameInstance = startKeyPress({
-        canvas,
-        audioScheduler,
-        onUpdateHUD: updateHUD,
-        difficulty: { ...difficulty, level: difficultySelect.value },
-        keybinds: currentKeybinds,
-        onGameEnd: stopGame
-      });
-      break;
-    case 'pattern':
-      gameInstance = startPatternMemory({
-        canvas,
-        audioScheduler,
-        onUpdateHUD: updateHUD,
-        difficulty,
-        onGameEnd: stopGame
-      });
-      break;
+switch (selectedMode) {
+  case 'beat':
+    gameInstance = startBeatClick(audioScheduler, canvas, {
+      onUpdateHUD: updateHUD,
+      difficulty: difficultyWithLevel,
+      onGameEnd: stopGame
+    });
+    break;
+  case 'key':
+    gameInstance = startKeyPress({
+      canvas,
+      audioScheduler,
+      onUpdateHUD: updateHUD,
+      difficulty: difficultyWithLevel,
+      keybinds: currentKeybinds,
+      onGameEnd: stopGame
+    });
+    break;
+  case 'pattern':
+    gameInstance = startPatternMemory({
+      canvas,
+      audioScheduler,
+      onUpdateHUD: updateHUD,
+      difficulty: difficultyWithLevel,
+      onGameEnd: stopGame
+    });
+    break;
+}
+
+  // start the game instance
+  if (gameInstance && typeof gameInstance.start === 'function') {
+    gameInstance.start();
   }
-
-
-  gameInstance.start();
 });
 
 function updateHUD({ score, combo, lastJudgement, accuracy, precision }) {
@@ -605,10 +632,8 @@ function updateHUD({ score, combo, lastJudgement, accuracy, precision }) {
     currentProgress.bestScore = score;
     saveUserData();
   }
-  // Save progress on each update for mode stats
-  if (currentUser && accuracy !== undefined) {
-    saveProgress(score, accuracy, combo, 0, precision);
-  }
+  // Do not persist progress on every HUD update to avoid excessive writes.
+  // Final progress is saved when the game stops (stopGame).
 }
 
 function initialiseUI() {
