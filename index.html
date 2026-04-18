@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Rhythm Reaction Trainer</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23007aff'/%3E%3Ctext x='16' y='22' font-size='18' text-anchor='middle' fill='%23fff'%3ER%3C/text%3E%3C/svg%3E" />
 </head>
 <body>
   <main id="app">
@@ -40,6 +41,7 @@
 
     <div id="game-container">
       <canvas id="game-canvas" width="800" height="500" aria-label="Game canvas"></canvas>
+      <div id="countdown" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:48px; color:white; display:none; pointer-events:none;">3</div>
       <div id="hud" role="status">
         <div id="score">Score: 0</div>
         <div id="combo">Combo: 0</div>
@@ -47,18 +49,6 @@
         <div id="accuracy">Accuracy: 100%</div>
         <div id="precision">Precision: 0 ms</div>
       </div>
-    </div>
-
-    <!-- Rubik die panel (top-right) -->
-    <div id="die-panel" aria-hidden="true" class="overlay-panel">
-      <div id="die-title">Target Die</div>
-      <div id="die-grid" class="die-grid"></div>
-    </div>
-
-    <!-- Legend (below die) -->
-    <div id="legend-panel" class="overlay-panel">
-      <div id="legend-colors" class="legend-colors"></div>
-      <div id="legend-numbers" class="legend-numbers"></div>
     </div>
 
     <!-- Tutorial GIF (bottom-right under die) -->
@@ -69,14 +59,16 @@
     <div id="login-modal" class="modal" hidden>
       <div class="modal-content">
         <h2>Log in</h2>
-        <label for="username">Username</label>
-        <input id="username" placeholder="Username" aria-label="Username" />
-        <label for="password">Password</label>
-        <input id="password" type="password" placeholder="Password" aria-label="Password" />
-        <div class="modal-buttons">
-          <button id="login-submit-btn">Log in</button>
-          <button id="login-cancel-btn">Cancel</button>
-        </div>
+        <form id="login-form" novalidate>
+          <label for="username">Username</label>
+          <input id="username" placeholder="Username" aria-label="Username" />
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="Password" aria-label="Password" autocomplete="current-password" />
+          <div class="modal-buttons">
+            <button id="login-submit-btn" type="button">Log in</button>
+            <button id="login-cancel-btn" type="button">Cancel</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -142,16 +134,18 @@
     <div id="signup-modal" class="modal" hidden>
       <div class="modal-content">
         <h2>Sign Up</h2>
-        <label for="signup-username">Username</label>
-        <input id="signup-username" placeholder="Username (3-16 chars, letters, numbers, -, _)" aria-label="Username" />
-        <label for="signup-password">Password</label>
-        <input id="signup-password" type="password" placeholder="Password (min 8 chars, include upper, lower, number, special)" aria-label="Password" />
-        <label for="signup-confirm-password">Confirm Password</label>
-        <input id="signup-confirm-password" type="password" placeholder="Confirm Password" aria-label="Confirm Password" />
-        <div class="modal-buttons">
-          <button id="signup-submit-btn">Sign Up</button>
-          <button id="signup-cancel-btn">Cancel</button>
-        </div>
+        <form id="signup-form" novalidate>
+          <label for="signup-username">Username</label>
+          <input id="signup-username" placeholder="Username (3-16 chars, letters, numbers, -, _)" aria-label="Username" />
+          <label for="signup-password">Password</label>
+          <input id="signup-password" type="password" placeholder="Password (min 8 chars, include upper, lower, number, special)" aria-label="Password" autocomplete="new-password" />
+          <label for="signup-confirm-password">Confirm Password</label>
+          <input id="signup-confirm-password" type="password" placeholder="Confirm Password" aria-label="Confirm Password" autocomplete="new-password" />
+          <div class="modal-buttons">
+            <button id="signup-submit-btn" type="button">Sign Up</button>
+            <button id="signup-cancel-btn" type="button">Cancel</button>
+          </div>
+        </form>
       </div>
     </div>
   </main>

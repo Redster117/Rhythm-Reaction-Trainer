@@ -174,6 +174,13 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
   }
 
   function start() {
+    if (canvas) {
+      canvas.classList.remove('pattern-memory-mode');
+      canvas.style.width = '';
+      canvas.style.height = '';
+      canvas.width = 800;
+      canvas.height = 500;
+    }
     render();
     handleInput();
   }

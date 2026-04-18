@@ -130,6 +130,13 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
   }
 
   function start() {
+    if (canvas) {
+      canvas.classList.remove('pattern-memory-mode');
+      canvas.style.width = '';
+      canvas.style.height = '';
+      canvas.width = 800;
+      canvas.height = 500;
+    }
     const now = safeNow();
     const startAt = now + 0.5;
     const patternData = pattern

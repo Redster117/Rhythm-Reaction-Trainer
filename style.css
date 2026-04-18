@@ -29,7 +29,18 @@ header h1{margin:0 0 12px 0;font-weight:600}
 #keybind-panel{display:grid;gap:8px;padding:12px;border:1px solid #222;border-radius:8px;background:#10131a;margin-bottom:12px}
 .keybind-row{display:grid;grid-template-columns:60px 1fr;gap:8px;align-items:center}
 #keybind-panel input{width:100%;padding:8px;border-radius:6px;border:1px solid #222;background:#0b0c0e;color:var(--accent)}
-#game-canvas{display:block;width:100%;background:#0b0c0e;border:1px solid #222;border-radius:6px}
+#game-canvas {
+  display:block;
+  width:100%;
+  background:#0b0c0e;
+  border:1px solid #222;
+  border-radius:6px;
+}
+
+#game-canvas.pattern-memory-mode {
+  width:400px;
+  height:400px;
+}
 #hud{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:12px;margin-top:8px;color:var(--muted)}
 #hud div{background:transparent;padding:10px 12px;border-radius:6px;border:1px solid #222}
 @media (max-width: 760px){main{width:100%;padding:0 12px}#controls{grid-template-columns:1fr}#mode-select{justify-content:center}#hud{grid-template-columns:1fr 1fr}}
@@ -147,18 +158,19 @@ th {
   opacity: 0.95;
 }
 
-/* small die grid (4 faces shown as squares) */
+/* dynamic die grid */
 .die-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(var(--cols, 2), 1fr);
   gap: 6px;
+  justify-content: end;
 }
 
 .die-face {
   width: 64px;
   height: 64px;
   border-radius: 6px;
-  border: 2px solid rgba(255,255,255,0.06);
+  border: 4px solid rgba(255,255,255,0.06);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -167,9 +179,8 @@ th {
   box-shadow: inset 0 -6px 12px rgba(0,0,0,0.15);
 }
 
-/* legend panel sits below die */
 #legend-panel {
-  top: 190px;
+  top: calc(12px + var(--die-height, 200px));
   right: 12px;
   width: 220px;
   padding: 8px;

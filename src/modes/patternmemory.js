@@ -1,47 +1,18 @@
 // src/modes/patternmemory.js
 import { getJudgement } from '../utils.js';
+import { AudioSchedulerPM } from '../audioPatternMemory.js';
 
 export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD, difficulty = {}, onGameEnd, debug = false } = {}) {
   const ctx = canvas.getContext('2d');
 
-  const DIFFICULTY_MAP = {
-    noob: { grid: 2, patternStart: 2 },
-    ez: { grid: 2, patternStart: 3 },
-    veteran: { grid: 4, patternStart: 4 },
-    experienced: { grid: 4, patternStart: 5 },
-    expert: { grid: 6, patternStart: 6 },
-    pro: { grid: 6, patternStart: 8 }
-  };
-
-  const diffKey = difficulty.level || 'veteran';
-  const cfg = DIFFICULTY_MAP[diffKey] || DIFFICULTY_MAP.veteran;
-
   const COLOURS = [
     '#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#007aff', '#5856d6', '#af52de'
   ];
+  const LABELS = ['R1', 'O2', 'Y3', 'G4', 'B5', 'Pu6', 'Pi7'];
+
+  let pmAudioScheduler = new AudioSchedulerPM();
 
   let rafId = null;
-  let cols = cfg.grid;
-  let rows = cfg.grid;
-  let totalTiles = cols * rows;
-  let grid = [];
-  let emptyIndex = totalTiles - 1;
-  let faces = difficulty.faces && Array.isArray(difficulty.faces) && difficulty.faces.length ? difficulty.faces.slice() : COLOURS.slice(0, 4);
-  let padding = 8;
-  let tileSize = 0;
-
-  let patternLength = typeof difficulty.patternStart === 'number' ? difficulty.patternStart : cfg.patternStart;
-  let sequence = [];
-  let diePattern = [];
-  let showSchedule = [];
-
-  const leadTime = typeof difficulty.leadTime === 'number' ? difficulty.leadTime : 0.6;
-  const showStepDuration = 0.55;
-  const tolerance = 0.12;
-
-  let state = 'idle';
-  let currentStep = 0;
-
   let score = 0;
   let combo = 0;
   let lastJudgement = '—';
@@ -50,257 +21,101 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   let goodCount = 0;
   let totalOffset = 0;
 
-  const dieGrid = document.getElementById('die-grid');
-  const legendColors = document.getElementById('legend-colors');
-  const legendNumbers = document.getElementById('legend-numbers');
-  const tutorialGif = document.getElementById('pattern-tutorial-gif');
+  const leadTime = 0.8;
+  const showDuration = 1.0;
+  const inputWindow = 3.0;
+
+  let maxTile = 7;
+  if (difficulty.level === 'ez') maxTile = 2;
+  else if (difficulty.level === 'veteran' || difficulty.level === 'experienced') maxTile = 4;
+  else if (difficulty.level === 'expert') maxTile = 6;
+  else if (difficulty.level === 'pro') maxTile = 7;
+
+  let state = 'idle'; // idle, countdown, showing, input, gameover
+  let currentRound = 0;
+  let totalRounds = 10;
+  let currentTile = null;
+  let currentTileFlashTime = 1;
+  let hasPlayerInput = false;
+  let devInjectJudgement = null;
+  let devAddScore = 0;
+  let inputTimeout = null;
+
+  const countdown = document.getElementById('countdown');
 
   function safeNow() {
-    return audioScheduler && typeof audioScheduler.getCurrentTime === 'function' ? audioScheduler.getCurrentTime() : performance.now() / 1000;
-  }
-
-  function indexToXY(index) { return { x: index % cols, y: Math.floor(index / cols) }; }
-  function xyToIndex(x, y) { return y * cols + x; }
-  function findTileByPos(pos) { return grid.find(t => t.pos === pos); }
-  function findTileById(id) { return grid.find(t => t.id === id); }
-  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
-
-  function initGrid() {
-  grid = [];
-  totalTiles = cols * rows;
-
-  // create tiles with default face indices
-  for (let i = 0; i < totalTiles; i++) {
-    if (i === totalTiles - 1) {
-      emptyIndex = i;
-      grid.push({ id: `empty`, pos: i, faceIndex: -1, isEmpty: true, anim: null });
-    } else {
-      const faceIndex = i % faces.length;
-      grid.push({ id: `t${i}`, pos: i, faceIndex, isEmpty: false, anim: null });
-    }
-  }
-
-  // Shuffle non-empty tiles' positions randomly (keep empty at last index)
-  const nonEmptyTiles = grid.filter(t => !t.isEmpty);
-  const positions = nonEmptyTiles.map(t => t.pos);
-  // Fisher-Yates shuffle positions
-  for (let i = positions.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [positions[i], positions[j]] = [positions[j], positions[i]];
-  }
-  // assign shuffled positions back to tiles
-  for (let i = 0; i < nonEmptyTiles.length; i++) {
-    nonEmptyTiles[i].pos = positions[i];
-  }
-  // ensure emptyIndex remains the last cell
-  emptyIndex = totalTiles - 1;
-  const emptyTile = grid.find(t => t.isEmpty);
-  if (emptyTile) emptyTile.pos = emptyIndex;
-
-  // render legend and die placeholders
-  renderLegend();
-  renderDiePanelPlaceholder();
-}
-
-
-  function getNeighbors(index) {
-    const n = [];
-    const { x, y } = indexToXY(index);
-    if (x > 0) n.push(xyToIndex(x - 1, y));
-    if (x < cols - 1) n.push(xyToIndex(x + 1, y));
-    if (y > 0) n.push(xyToIndex(x, y - 1));
-    if (y < rows - 1) n.push(xyToIndex(x, y + 1));
-    return n;
-  }
-
-  function isAdjacentGrid(a, b) {
-    const ax = a % cols, ay = Math.floor(a / cols);
-    const bx = b % cols, by = Math.floor(b / cols);
-    return Math.abs(ax - bx) + Math.abs(ay - by) === 1;
-  }
-
-  function slideTileToEmpty(tilePos, animate = true) {
-    const tile = findTileByPos(tilePos);
-    if (!tile || tile.isEmpty) return false;
-    if (!isAdjacentGrid(tile.pos, emptyIndex)) return false;
-    const from = tile.pos;
-    const to = emptyIndex;
-    tile.pos = to;
-    const emptyTile = findTileByPos(to);
-    if (emptyTile) emptyTile.pos = from;
-    emptyIndex = from;
-    if (animate) tile.anim = { from, to, start: performance.now(), dur: 180 };
-    return true;
-  }
-
-  function flipTileAt(pos, animate = true) {
-    const tile = findTileByPos(pos);
-    if (!tile || tile.isEmpty) return false;
-    const next = (tile.faceIndex + 1) % faces.length;
-    tile.anim = { flip: true, start: performance.now(), dur: 220, nextFace: next };
-    return true;
-  }
-
-  function seededRng(seed) {
-    let s = seed >>> 0;
-    return function () {
-      s = (s * 1664525 + 1013904223) >>> 0;
-      return s / 4294967296;
-    };
-  }
-
-  function generateDiePattern(seed, facesCount = 4) {
-    const rng = seededRng(seed || Math.floor(Math.random() * 1e9));
-    const pattern = [];
-    for (let i = 0; i < facesCount; i++) pattern.push(1 + Math.floor(rng() * 7));
-    return pattern;
-  }
-
-  function mapDieToCells(diePattern) {
-    const mapping = [];
-    const nonEmpty = grid.filter(t => !t.isEmpty).slice(0, diePattern.length);
-    for (let i = 0; i < diePattern.length; i++) {
-      const tile = nonEmpty[i];
-      mapping.push({ tileId: tile.id, cellIndex: tile.pos, colourIndex: diePattern[i] });
-    }
-    return mapping;
-  }
-
-  function chooseInteractionType() {
-  // Only produce 'tap' or 'flip' interactions now (no sliding)
-  if (diffKey === 'noob' || diffKey === 'ez') return 'tap';
-  if (diffKey === 'veteran' || diffKey === 'experienced') {
-    return Math.random() < 0.6 ? 'flip' : 'tap';
-  }
-  // expert / pro: mostly flip, occasional tap
-  return Math.random() < 0.8 ? 'flip' : 'tap';
-  }
-
-  function generateSequenceFromDie(diePattern, length = patternLength) {
-    const mapping = mapDieToCells(diePattern);
-    const seq = [];
-    for (let i = 0; i < length; i++) {
-      const m = mapping[i % mapping.length];
-      const interactionType = chooseInteractionType();
-      seq.push({ tileId: m.tileId, targetPos: m.cellIndex, colourIndex: m.colourIndex, interactionType });
-    }
-    return seq;
-  }
-
-  function buildShowSchedule(seq) {
-    showSchedule = [];
-    const now = safeNow();
-    const secondsPerBeat = audioScheduler && audioScheduler.secondsPerBeat ? audioScheduler.secondsPerBeat : 0.5;
-    const startAt = now + 0.6;
-    for (let i = 0; i < seq.length; i++) {
-      const beatTime = startAt + i * secondsPerBeat;
-      const spawnTime = beatTime - leadTime;
-      showSchedule.push({
-        beatTime,
-        spawnTime,
-        cellIndex: seq[i].targetPos,
-        colourIndex: seq[i].colourIndex,
-        interactionType: seq[i].interactionType,
-        shown: false
-      });
-    }
-  }
-
-  function renderLegend() {
-    if (!legendColors || !legendNumbers) return;
-    legendColors.innerHTML = '';
-    legendNumbers.innerHTML = '';
-    for (let i = 0; i < 7; i++) {
-      const sw = document.createElement('div');
-      sw.className = 'legend-swatch';
-      sw.style.background = COLOURS[i];
-      legendColors.appendChild(sw);
-      const num = document.createElement('div');
-      num.textContent = (i + 1).toString();
-      num.style.width = '26px';
-      num.style.textAlign = 'center';
-      legendNumbers.appendChild(num);
-    }
-  }
-
-  function renderDiePanelPlaceholder() {
-    if (!dieGrid) return;
-    dieGrid.innerHTML = '';
-    const facesCount = Math.min(4, cols * rows - 1);
-    for (let i = 0; i < facesCount; i++) {
-      const d = document.createElement('div');
-      d.className = 'die-face';
-      d.textContent = '-';
-      dieGrid.appendChild(d);
-    }
-  }
-
-  function updateDiePanel(pattern) {
-    if (!dieGrid) return;
-    dieGrid.innerHTML = '';
-    for (let i = 0; i < pattern.length; i++) {
-      const idx = pattern[i] - 1;
-      const d = document.createElement('div');
-      d.className = 'die-face';
-      d.style.background = COLOURS[idx];
-      d.textContent = pattern[i].toString();
-      dieGrid.appendChild(d);
-    }
+    return pmAudioScheduler ? pmAudioScheduler.getCurrentTime() : performance.now() / 1000;
   }
 
   function render() {
     const now = safeNow();
     const w = canvas.width;
     const h = canvas.height;
+
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = '#0b0c0e';
     ctx.fillRect(0, 0, w, h);
 
-    const usableW = w - padding * 2;
-    tileSize = Math.min(usableW / cols, h - padding * 2);
-    const startX = (w - tileSize * cols) / 2;
-    const startY = (h - tileSize * rows) / 2;
-
-    for (const tile of grid) renderTile(tile, startX, startY, performance.now());
-
-    if (state === 'showing') {
-      for (let i = 0; i < showSchedule.length; i++) {
-        const item = showSchedule[i];
-        const tSpawn = item.spawnTime;
-        const tBeat = item.beatTime;
-        const highlightDur = showStepDuration;
-        if (now < tSpawn) continue;
-        const timeSinceSpawn = now - tSpawn;
-        const timeSinceBeat = now - tBeat;
-        const pos = item.cellIndex;
-        const x = startX + (pos % cols) * tileSize;
-        const y = startY + Math.floor(pos / cols) * tileSize;
-
-        if (now < tBeat) {
-          const progress = Math.min(1, timeSinceSpawn / (tBeat - tSpawn));
-          const radius = tileSize * (0.25 + 0.25 * (1 - progress));
-          ctx.globalAlpha = 0.6;
-          ctx.fillStyle = COLOURS[item.colourIndex - 1];
-          ctx.beginPath();
-          ctx.arc(x + tileSize / 2, y + tileSize / 2, radius, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        } else if (timeSinceBeat <= highlightDur) {
-          ctx.globalAlpha = 1;
-          ctx.fillStyle = COLOURS[item.colourIndex - 1];
-          roundRect(ctx, x + 6, y + 6, tileSize - 12, tileSize - 12, 8);
-          ctx.fill();
-          if (!item.shown) {
-            item.shown = true;
-            pulseDieFace(item.colourIndex);
-          }
-        }
-      }
-    }
+    // Left side: clickable area
+    ctx.fillStyle = '#1a1d24';
+    ctx.fillRect(0, 0, w / 2, h);
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(0, 0, w / 2, h);
 
     ctx.fillStyle = '#e6eef6';
+    ctx.font = '20px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press keys to the beat', w / 4, h / 2);
+
+    // Right side: tile display
+    ctx.fillStyle = '#0b0c0e';
+    ctx.fillRect(w / 2, 0, w / 2, h);
+
+    if (state === 'showing' && currentTile) {
+      const tileSize = Math.min(w / 4, h / 2);
+      const tileX = w / 2 + (w / 4 - tileSize / 2);
+      const tileY = h / 2 - tileSize / 2;
+
+      // Flash animation
+      const timeSinceSpawn = now - currentTileFlashTime;
+      const progress = Math.min(timeSinceSpawn / leadTime, 1);
+
+      if (timeSinceSpawn < leadTime) {
+        // Expanding circle before beat
+        const radius = (tileSize / 2) * (0.3 + 0.4 * (1 - progress));
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = COLOURS[currentTile - 1];
+        ctx.beginPath();
+        ctx.arc(w / 2 + w / 4, h / 2, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else if (timeSinceSpawn < leadTime + showDuration) {
+        // Highlight the tile box
+        ctx.fillStyle = COLOURS[currentTile - 1];
+        ctx.fillRect(tileX + 6, tileY + 6, tileSize - 12, tileSize - 12);
+      }
+
+      // Draw tile box
+      ctx.fillStyle = COLOURS[currentTile - 1];
+      ctx.fillRect(tileX, tileY, tileSize, tileSize);
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(tileX, tileY, tileSize, tileSize);
+
+      // Draw label
+      ctx.fillStyle = '#071226';
+      ctx.font = `bold ${Math.max(24, tileSize * 0.3)}px system-ui`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(LABELS[currentTile - 1], w / 2 + w / 4, h / 2);
+    }
+
+    // HUD info
+    ctx.fillStyle = '#e6eef6';
     ctx.font = '14px system-ui';
-    ctx.fillText(`Level: ${patternLength}`, 12, 20);
+    ctx.textAlign = 'left';
+    ctx.fillText(`Round: ${currentRound + 1}/${totalRounds}`, 12, 20);
     ctx.fillText(`Score: ${score}`, 12, 40);
     ctx.fillText(`Last: ${lastJudgement}`, 12, 60);
     ctx.fillText(`State: ${state}`, 12, 80);
@@ -308,196 +123,71 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     rafId = requestAnimationFrame(render);
   }
 
-  function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
-
-  function drawTileAt(tile, x, y, size) {
-    const pad = 6;
-    if (tile.isEmpty) {
-      ctx.fillStyle = '#0b0c0e';
-      ctx.fillRect(x + pad, y + pad, size - pad * 2, size - pad * 2);
-      ctx.strokeStyle = '#222';
-      ctx.strokeRect(x + pad, y + pad, size - pad * 2, size - pad * 2);
-      return;
-    }
-    ctx.save();
-    ctx.translate(x + pad, y + pad);
-    const face = faces[tile.faceIndex] || '#888';
-    roundRect(ctx, 0, 0, size - pad * 2, size - pad * 2, 8);
-    ctx.fillStyle = face;
-    ctx.fill();
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = '#071226';
-    ctx.font = `${Math.max(12, (size - pad * 2) * 0.22)}px system-ui`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(tile.id.replace('t', ''), (size - pad * 2) / 2, (size - pad * 2) / 2);
-    ctx.restore();
-  }
-
-  function drawFlippingTile(tile, x, y, size, t) {
-    const half = 0.5;
-    const scale = Math.cos((t) * Math.PI) * 0.9;
-    const absScale = Math.abs(scale);
-    ctx.save();
-    ctx.translate(x + size / 2, y + size / 2);
-    ctx.scale(absScale, 1);
-    const face = t < half ? faces[tile.faceIndex] : faces[tile.anim && tile.anim.nextFace !== undefined ? tile.anim.nextFace : tile.faceIndex];
-    roundRect(ctx, -(size - 12) / 2, -(size - 12) / 2, size - 12, size - 12, 8);
-    ctx.fillStyle = face || '#888';
-    ctx.fill();
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
-    if (t >= 1 && tile.anim && tile.anim.nextFace !== undefined) {
-      tile.faceIndex = tile.anim.nextFace;
-      tile.anim = null;
-    }
-  }
-
-  function renderTile(tile, startX, startY, nowMs) {
-    if (tile.anim && tile.anim.from !== undefined && tile.anim.to !== undefined) {
-      const t = Math.min(1, (nowMs - tile.anim.start) / tile.anim.dur);
-      const fromX = (tile.anim.from % cols) * tileSize;
-      const toX = (tile.anim.to % cols) * tileSize;
-      const fromY = Math.floor(tile.anim.from / cols) * tileSize;
-      const toY = Math.floor(tile.anim.to / cols) * tileSize;
-      const curX = fromX + (toX - fromX) * easeOutCubic(t);
-      const curY = fromY + (toY - fromY) * easeOutCubic(t);
-      drawTileAt(tile, startX + curX, startY + curY, tileSize);
-      if (t >= 1) tile.anim = null;
-      return;
-    }
-    if (tile.anim && tile.anim.flip) {
-      const t = Math.min(1, (nowMs - tile.anim.start) / tile.anim.dur);
-      drawFlippingTile(tile, startX + (tile.pos % cols) * tileSize, startY + Math.floor(tile.pos / cols) * tileSize, tileSize, t);
-      return;
-    }
-    drawTileAt(tile, startX + (tile.pos % cols) * tileSize, startY + Math.floor(tile.pos / cols) * tileSize, tileSize);
-  }
-
-  function pulseDieFace(colourIndex) {
-    if (!dieGrid) return;
-    const children = Array.from(dieGrid.children);
-    for (const c of children) {
-      if (c.textContent === String(colourIndex) || c.style.background === COLOURS[colourIndex - 1]) {
-        c.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'scale(1)' }], { duration: 360 });
-        break;
-      }
-    }
-  }
-
-  function startShowingSequence() {
-    diePattern = generateDiePattern(Math.floor(Math.random() * 1e9), Math.min(4, cols * rows - 1));
-    updateDiePanel(diePattern);
-    sequence = generateSequenceFromDie(diePattern, patternLength);
-    buildShowSchedule(sequence);
-    if (tutorialGif) tutorialGif.hidden = false;
-    state = 'showing';
-    currentStep = 0;
-    const last = showSchedule.length ? showSchedule[showSchedule.length - 1] : null;
-    const lastEnd = last ? last.beatTime + showStepDuration : safeNow() + 0.5;
-    const delayMs = Math.max(0, (lastEnd - safeNow()) * 1000) + 80;
+  function showCountdown() {
+    countdown.style.display = 'block';
+    countdown.textContent = '3';
+    setTimeout(() => countdown.textContent = '2', 1000);
+    setTimeout(() => countdown.textContent = '1', 2000);
     setTimeout(() => {
-      if (tutorialGif) tutorialGif.hidden = true;
+      countdown.style.display = 'none';
+      startRound();
+    }, 3000);
+  }
+
+  function startRound() {
+    if (currentRound >= totalRounds) {
+      triggerGameOver();
+      return;
+    }
+
+    // Pick a random tile (1-maxTile)
+    currentTile = Math.floor(Math.random() * maxTile) + 1;
+    hasPlayerInput = false;
+    currentTileFlashTime = safeNow();
+
+    // Play the tile's beat
+    pmAudioScheduler.playTileBeat(currentTile);
+    hasPlayerInput = false;
+
+    state = 'showing';
+
+    // After show duration, go to input phase
+    setTimeout(() => {
       state = 'input';
-      currentStep = 0;
-      onUpdateHUDSafe();
-    }, delayMs);
+      inputTimeout = setTimeout(() => {
+        evaluateRound();
+      }, inputWindow * 1000);
+    }, (leadTime + showDuration) * 1000);
   }
 
-function handlePlayerAction(clickedIndex) {
-  if (state !== 'input') return;
-  const now = safeNow();
-  const expected = showSchedule[currentStep];
-  if (!expected) return;
-
-  // Compute timing diff for scoring/judgement only (no game over)
-  const diff = now - expected.beatTime;
-
-  // Perform click semantics: always flip the clicked tile (no sliding)
-  // If the clicked cell is the empty cell, do nothing.
-  const clickedTile = findTileByPos(clickedIndex);
-  if (!clickedTile || clickedTile.isEmpty) {
-    onUpdateHUDSafe();
-    return;
+  function onKeyDown(e) {
+    if (state !== 'input' || e.ctrlKey || e.altKey || e.metaKey) return;
+    userPresses.push(safeNow());
   }
-  flipTileAt(clickedIndex, true);
 
-  // Check if current step satisfied (tile in target pos and correct face)
-  const elem = sequence[currentStep];
-  const tile = findTileById(elem.tileId);
-  if (tile && tile.pos === elem.targetPos && tile.faceIndex === (elem.colourIndex - 1) % faces.length) {
-    const judgement = getJudgement(Math.abs(diff));
+  function applyJudgement(judgementLabel) {
     totalJudgements++;
-    totalOffset += Math.abs(diff);
-    if (judgement.label === 'Perfect') perfectCount++;
-    if (judgement.label === 'Good') goodCount++;
-    if (judgement.points > 0) {
-      score += judgement.points;
+
+    const judgement = { label: judgementLabel };
+
+    if (judgement.label === 'Perfect') {
+      perfectCount++;
+      score += 300;
+      combo += 1;
+    } else if (judgement.label === 'Good') {
+      goodCount++;
+      score += 100;
       combo += 1;
     } else {
       combo = 0;
     }
+
     lastJudgement = judgement.label;
-    currentStep++;
+
     onUpdateHUDSafe();
 
-    if (currentStep >= sequence.length) {
-      setTimeout(() => {
-        patternLength = Math.min(totalTiles - 1, patternLength + 1);
-        startShowingSequence();
-      }, 700);
-    }
-  } else {
-    // Not yet satisfied — update HUD and allow further flips
-    onUpdateHUDSafe();
-  }
-}
-
-  function triggerGameOver() {
-    state = 'gameover';
-    lastJudgement = 'Off-beat - Game Over';
-    onUpdateHUDSafe();
-    canvas.animate([{ opacity: 1 }, { opacity: 0.2 }, { opacity: 1 }], { duration: 420 });
-    setTimeout(() => {
-      stop();
-      if (typeof onGameEnd === 'function') onGameEnd();
-    }, 600);
-  }
-
-  function onPointerDown(e) {
-    if (state !== 'input') return;
-    const rect = canvas.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
-    const idx = hitTest(px, py);
-    if (idx === null) return;
-    handlePlayerAction(idx);
-  }
-
-  function hitTest(px, py) {
-    const w = canvas.width;
-    const h = canvas.height;
-    const usableW = w - padding * 2;
-    tileSize = Math.min(usableW / cols, h - padding * 2);
-    const startX = (w - tileSize * cols) / 2;
-    const startY = (h - tileSize * rows) / 2;
-    if (py < startY || py > startY + tileSize * rows) return null;
-    if (px < startX || px > startX + tileSize * cols) return null;
-    const col = Math.floor((px - startX) / tileSize);
-    const row = Math.floor((py - startY) / tileSize);
-    return xyToIndex(col, row);
+    currentRound++;
+    setTimeout(() => startRound(), 500);
   }
 
   function onUpdateHUDSafe() {
@@ -508,53 +198,99 @@ function handlePlayerAction(clickedIndex) {
         lastJudgement,
         accuracy: totalJudgements ? Math.round(((perfectCount + goodCount) / totalJudgements) * 100) : 100,
         precision: totalJudgements ? Math.round((totalOffset / totalJudgements) * 1000) : 0,
-        level: patternLength,
-        step: currentStep + 1,
-        totalSteps: sequence.length
+        level: currentRound + 1,
+        step: currentRound + 1,
+        totalSteps: totalRounds
       });
     }
   }
 
+  function onPointerDown(e) {
+    if (state !== 'input') return;
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+
+    // Only register clicks on the left side
+    if (px < canvas.width / 2) {
+      userPresses.push(safeNow());
+    }
+  }
+
+  function triggerGameOver() {
+    state = 'gameover';
+    lastJudgement = 'Game Over';
+    onUpdateHUDSafe();
+    canvas.animate([{ opacity: 1 }, { opacity: 0.2 }, { opacity: 1 }], { duration: 420 });
+    setTimeout(() => {
+      stop();
+      if (typeof onGameEnd === 'function') onGameEnd();
+    }, 600);
+  }
+
   function start() {
-    cols = cfg.grid;
-    rows = cfg.grid;
-    totalTiles = cols * rows;
-    initGrid();
+    canvas.classList.add('pattern-memory-mode');
+    canvas.width = canvas.height = 400;
+    canvas.style.width = canvas.style.height = '400px';
+
+    pmAudioScheduler.setBPM(120);
+    pmAudioScheduler.init().then(() => {
+      pmAudioScheduler.start();
+    });
+
     canvas.addEventListener('pointerdown', onPointerDown);
-    startShowingSequence();
+    window.addEventListener('keydown', onKeyDown);
+    state = 'countdown';
+    currentRound = 0;
+    score = 0;
+    combo = 0;
+    lastJudgement = '—';
+    totalJudgements = 0;
+    perfectCount = 0;
+    goodCount = 0;
+    totalOffset = 0;
+
+    showCountdown();
     rafId = requestAnimationFrame(render);
   }
 
   function stop() {
     if (rafId) cancelAnimationFrame(rafId);
     rafId = null;
+    if (canvas) {
+      canvas.classList.remove('pattern-memory-mode');
+      canvas.style.width = '';
+      canvas.style.height = '';
+      canvas.width = 800;
+      canvas.height = 500;
+    }
     canvas.removeEventListener('pointerdown', onPointerDown);
+    window.removeEventListener('keydown', onKeyDown);
     state = 'idle';
-    if (tutorialGif) tutorialGif.hidden = true;
+    pmAudioScheduler.stop();
+  }
+
+  // Developer control methods
+  function devForceTile(tile) {
+    if (state === 'idle' || state === 'countdown') return;
+    currentTile = tile;
+    console.log(`%c🔧 Dev: Forced tile to ${tile}`, 'color: #ff0000;');
+  }
+
+  function devInjectJudgementFunc(judgement) {
+    devInjectJudgement = judgement;
+    console.log(`%c🔧 Dev: Injected judgement ${judgement}`, 'color: #ff0000;');
+  }
+
+  function devAddScoreFunc(amount) {
+    devAddScore = amount;
+    console.log(`%c🔧 Dev: Added ${amount} score`, 'color: #ff0000;');
   }
 
   function reset() {
     stop();
-    initGrid();
-    sequence = [];
-    showSchedule = [];
-    state = 'idle';
+    // Restart with same params - but params not stored, so just stop for now
+    console.log('%c🔧 Dev: Game reset (stopped)', 'color: #ff0000;');
   }
 
-  function getState() {
-    return {
-      score,
-      combo,
-      lastJudgement,
-      state,
-      patternLength,
-      sequence: sequence.slice(),
-      diePattern: diePattern.slice(),
-      totals: { totalJudgements, perfectCount, goodCount, totalOffset }
-    };
-  }
-
-  function setDebug(v) { debug = !!v; }
-
-  return { start, stop, reset, getState, setDebug };
+  return { start, stop, devForceTile, devInjectJudgementFunc, devAddScoreFunc, reset };
 }

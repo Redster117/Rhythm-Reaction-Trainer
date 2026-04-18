@@ -3,6 +3,7 @@ import { AudioScheduler } from './audio.js';
 import { startBeatClick } from './modes/beatclick.js';
 import startKeyPress from './modes/keypress.js';
 import startPatternMemory from './modes/patternmemory.js';
+import { initDevControls } from './developerControls.js';
 
 const STORAGE_USERS = 'rtr-users-v1';
 const DEFAULT_KEYBINDS = { A: 'A', S: 'S', D: 'D', F: 'F' };
@@ -47,6 +48,7 @@ const modeButtons = {
 
 let audioScheduler = null;
 let gameInstance = null;
+let devControls = initDevControls();
 let selectedMode = 'beat'; // default mode
 let isGameRunning = false;
 let currentUser = null;
@@ -581,11 +583,16 @@ startBtn.addEventListener('click', async () => {
   startBtn.style.opacity = '0.5';
 
   const difficulty = difficultyPresets[difficultySelect.value] || difficultyPresets[DEFAULT_DIFFICULTY];
-  audioScheduler = new AudioScheduler();
-  audioScheduler.setBPM(difficulty.bpm);
-  await audioScheduler.init();
+  
+  const difficultyWithLevel = { ...difficulty, level: difficultySelect.value };
 
-const difficultyWithLevel = { ...difficulty, level: difficultySelect.value };
+  if (selectedMode !== 'pattern') {
+    audioScheduler = new AudioScheduler();
+    audioScheduler.setBPM(difficulty.bpm);
+    await audioScheduler.init();
+  } else {
+    audioScheduler = null; // Pattern mode uses its own audio
+  }
 
 switch (selectedMode) {
   case 'beat':
@@ -618,6 +625,7 @@ switch (selectedMode) {
 
   // start the game instance
   if (gameInstance && typeof gameInstance.start === 'function') {
+    devControls.setGameInstance(gameInstance);
     gameInstance.start();
   }
 });
