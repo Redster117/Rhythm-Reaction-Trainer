@@ -48,11 +48,16 @@ const modeButtons = {
   pattern: document.getElementById('btn-pattern')
 };
 
-let easterHoverActive = false;
-let easterSequenceIndex = 0;
-const easterSequence = ['KeyT', 'KeyW', 'KeyO', 'KeyF', 'KeyO', 'KeyR', 'KeyT'];
-let easterOverlay = null;
-let easterAudioCtx = null;
+let spinningHeavyHoverActive = false;
+let spinningHeavySequenceIndex = 0;
+const spinningHeavyOpenSequence = ['KeyT', 'KeyW', 'KeyO', 'KeyF', 'KeyO', 'KeyR', 'KeyT'];
+const spinningHeavyCloseSequence = ['KeyN', 'KeyE', 'KeyD', 'KeyA'];
+let spinningHeavyOverlay = null;
+let spinningHeavyAudio = null;
+let demoGifUnlocked = false;
+let demoGifUnlockReady = false;
+const DEMOGIF_ACTIVATION_SEQUENCE = ['KeyN', 'KeyE', 'KeyD', 'KeyA'];
+const DEMOGIF_BIND_ORDER = ['A', 'S', 'D', 'F'];
 
 
 let audioScheduler = null;
@@ -337,6 +342,81 @@ function loadKeybindInputs() {
   });
 }
 
+function isDemoGifActivationSequence() {
+  return DEMOGIF_BIND_ORDER.every((label, index) => {
+    const inputValue = bindInputs[label].value.trim();
+    const normalized = inputValue.length ? normalizeKeybindInput(inputValue) : DEFAULT_KEYBINDS[label];
+    return normalized === DEMOGIF_ACTIVATION_SEQUENCE[index];
+  });
+}
+
+function showDemoGifIfUnlocked() {
+  if (!demoGifUnlocked || !demoGif) return;
+
+  // Create temporary overlay for Demoman.png
+  const tempOverlay = document.createElement('div');
+  tempOverlay.id = 'temp-demo-overlay';
+  tempOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+  tempOverlay.innerHTML = `
+    <img id="temp-demo-image" src="docs/Demoman.png" alt="Demoman" style="max-width: 80%; max-height: 80%; object-fit: contain;" />
+  `;
+
+  document.body.appendChild(tempOverlay);
+
+  // Play thats-racist.mp3
+  const racistAudio = new Audio('docs/thats-racist.mp3');
+  racistAudio.volume = 1;
+  racistAudio.play().catch(() => {
+    console.log('Failed to play thats-racist.mp3');
+  });
+
+  // When racist audio ends, wait 0.5 seconds, then switch to demo.gif
+  racistAudio.addEventListener('ended', () => {
+    console.log('thats-racist.mp3 ended, starting 0.5s delay');
+    setTimeout(() => {
+      console.log('0.5s delay done, switching to demo.gif');
+      const tempImage = document.getElementById('temp-demo-image');
+      if (tempImage) {
+        tempImage.src = 'docs/demo.gif';
+      }
+
+      // Delay kahbeewm start so it ends when demo.gif ends (demo.gif: 2.67s, kahbeewm: 1.23s)
+      setTimeout(() => {
+        console.log('Starting kahbeewm.mp3 after additional delay');
+        const kahbeewmAudio = new Audio('docs/kahbeeewm.mp3');
+        kahbeewmAudio.volume = 1;
+        kahbeewmAudio.play().catch(() => {
+          console.log('Failed to play kahbeeewm.mp3');
+        });
+
+        // After kahbeewm audio ends, remove overlay and show bottom right gif
+        kahbeewmAudio.addEventListener('ended', () => {
+          console.log('kahbeewm.mp3 ended, removing overlay');
+          tempOverlay.remove();
+          demoGif.src = 'docs/kazotsky-kick-demoman.gif';
+          demoGif.style.display = '';
+        });
+      }, 600); // 1.44 seconds after demo.gif starts (2.67 - 1.23 = 1.44)
+    }, 500); // 0.5 seconds after racist audio ends
+  });
+}
+
+function hideDemoGif() {
+  if (!demoGif) return;
+  demoGif.style.display = 'none';
+}
+
 function saveUserData() {
   if (!currentUser || !currentPasswordHash) return;
   const users = getStoredUsers();
@@ -521,10 +601,19 @@ saveSettingsBtn.addEventListener('click', () => {
   });
   setStoredKeybinds(currentKeybinds);
   saveUserData();
-  showMessage('Keybinds saved.');
+  demoGifUnlockReady = isDemoGifActivationSequence();
+  if (demoGifUnlockReady) {
+    } else {
+    showMessage('Keybinds saved.');
+  }
 });
 
 cancelSettingsBtn.addEventListener('click', () => {
+  if (demoGifUnlockReady) {
+    demoGifUnlocked = true;
+    showDemoGifIfUnlocked();
+    demoGifUnlockReady = false;
+  }
   if (currentUser) {
     loadKeybindInputs();
   }
@@ -604,99 +693,121 @@ window.addEventListener('keydown', (e) => {
     loginModal.hidden = true;
     settingsModal.hidden = true;
     signupModal.hidden = true;
-    closeEasterOverlay();
+    closeSpinningHeavyOverlay();
   }
   if (e.code === 'Backspace' && isGameRunning) {
     e.preventDefault();
     stopGame();
   }
 
-  if (easterHoverActive && !easterOverlay) {
-    if (e.code === easterSequence[easterSequenceIndex]) {
-      easterSequenceIndex += 1;
-      if (easterSequenceIndex === easterSequence.length) {
-        easterSequenceIndex = 0;
-        showEasterEgg();
+  if (!spinningHeavyOverlay && spinningHeavyHoverActive) {
+    if (e.code === spinningHeavyOpenSequence[spinningHeavySequenceIndex]) {
+      spinningHeavySequenceIndex += 1;
+      if (spinningHeavySequenceIndex === spinningHeavyOpenSequence.length) {
+        spinningHeavySequenceIndex = 0;
+        showSpinningHeavyOverlay();
       }
     } else {
-      easterSequenceIndex = e.code === easterSequence[0] ? 1 : 0;
+      spinningHeavySequenceIndex = e.code === spinningHeavyOpenSequence[0] ? 1 : 0;
+    }
+  } else if (spinningHeavyOverlay) {
+    if (e.code === spinningHeavyCloseSequence[spinningHeavySequenceIndex]) {
+      spinningHeavySequenceIndex += 1;
+      if (spinningHeavySequenceIndex === spinningHeavyCloseSequence.length) {
+        spinningHeavySequenceIndex = 0;
+        closeSpinningHeavyOverlay();
+      }
+    } else {
+      spinningHeavySequenceIndex = e.code === spinningHeavyCloseSequence[0] ? 1 : 0;
     }
   }
 });
 
 if (demoGif) {
   demoGif.addEventListener('mouseenter', () => {
-    easterHoverActive = true;
-    easterSequenceIndex = 0;
+    spinningHeavyHoverActive = true;
+    spinningHeavySequenceIndex = 0;
   });
   demoGif.addEventListener('mouseleave', () => {
-    easterHoverActive = false;
-    easterSequenceIndex = 0;
+    spinningHeavyHoverActive = false;
+    spinningHeavySequenceIndex = 0;
   });
 }
 
-function showEasterEgg() {
-  if (easterOverlay) return;
+function showSpinningHeavyOverlay() {
+  if (spinningHeavyOverlay) return;
 
-  easterOverlay = document.createElement('div');
-  easterOverlay.id = 'easter-overlay';
-  easterOverlay.innerHTML = `
-    <div class="easter-content">
-      <button id="easter-close" aria-label="Close easter egg">×</button>
-      <img id="easter-media" src="docs/easter.gif" alt="Easter egg surprise" />
-    </div>
+  spinningHeavyOverlay = document.createElement('div');
+  spinningHeavyOverlay.id = 'spinning-heavy-overlay';
+  spinningHeavyOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  `;
+  spinningHeavyOverlay.innerHTML = `
+    <img id="spinning-heavy-media" src="docs/spinning-heavy.gif" alt="Spinning heavy surprise" style="max-width: 95%; max-height: 95%; object-fit: contain;height: 700px;" />
   `;
 
-  document.body.appendChild(easterOverlay);
-  document.getElementById('easter-close')?.addEventListener('click', closeEasterOverlay);
-  easterOverlay.addEventListener('click', (event) => {
-    if (event.target === easterOverlay) {
-      closeEasterOverlay();
+  document.body.appendChild(spinningHeavyOverlay);
+  if (demoGif) {
+    demoGif.style.display = 'none';
+  }
+  document.getElementById('spinning-heavy-close')?.addEventListener('click', closeSpinningHeavyOverlay);
+  spinningHeavyOverlay.addEventListener('click', (event) => {
+    if (event.target === spinningHeavyOverlay) {
+      closeSpinningHeavyOverlay();
     }
   });
 
-  const easterMedia = document.getElementById('easter-media');
-  if (easterMedia) {
-    easterMedia.addEventListener('error', () => {
-      easterMedia.src = 'docs/demo.gif';
+  const spinningHeavyMedia = document.getElementById('spinning-heavy-media');
+  if (spinningHeavyMedia) {
+    spinningHeavyMedia.addEventListener('error', () => {
+      spinningHeavyMedia.src = 'docs/demo.gif';
     });
   }
 
-  playEasterAudio();
+  playSpinningHeavyAudio();
 }
 
-function closeEasterOverlay() {
-  if (!easterOverlay) return;
-  easterOverlay.remove();
-  easterOverlay = null;
-  stopEasterAudio();
+function closeSpinningHeavyOverlay() {
+  if (!spinningHeavyOverlay) return;
+  spinningHeavyOverlay.remove();
+  spinningHeavyOverlay = null;
+  spinningHeavySequenceIndex = 0;
+  stopSpinningHeavyAudio();
+  // Hide demo.gif to require restarting the unlock cycle
+  if (demoGif) {
+    demoGif.style.display = 'none';
+  }
+  demoGifUnlocked = false;
+  demoGifUnlockReady = false;
 }
 
-function playEasterAudio() {
-  if (easterAudioCtx) {
-    stopEasterAudio();
+function playSpinningHeavyAudio() {
+  if (spinningHeavyAudio) {
+    stopSpinningHeavyAudio();
   }
 
-  easterAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const gain = easterAudioCtx.createGain();
-  gain.gain.setValueAtTime(0.18, easterAudioCtx.currentTime);
-  gain.connect(easterAudioCtx.destination);
-
-  const melody = [440, 494, 523, 587, 659, 587, 523, 494];
-  melody.forEach((freq, index) => {
-    const osc = easterAudioCtx.createOscillator();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, easterAudioCtx.currentTime + index * 0.18);
-    osc.connect(gain);
-    osc.start(easterAudioCtx.currentTime + index * 0.18);
-    osc.stop(easterAudioCtx.currentTime + index * 0.18 + 0.16);
+  spinningHeavyAudio = new Audio('docs/spinning_heavy_audio.mp3');
+  spinningHeavyAudio.loop = true;
+  spinningHeavyAudio.volume = 0.65;
+  spinningHeavyAudio.play().catch(() => {
+    // Autoplay may be blocked; keep the audio object ready for user interaction.
   });
 }
 
-function stopEasterAudio() {
-  if (!easterAudioCtx) return;
-  easterAudioCtx.close();
-  easterAudioCtx = null;
+function stopSpinningHeavyAudio() {
+  if (!spinningHeavyAudio) return;
+  spinningHeavyAudio.pause();
+  spinningHeavyAudio.currentTime = 0;
+  spinningHeavyAudio = null;
 }
 
 
@@ -795,6 +906,7 @@ function initialiseUI() {
   loadStoredKeybinds();
   updateHeaderControls();
   updateProfileInfo();
+  hideDemoGif();
 }
 
 initialiseUI();
