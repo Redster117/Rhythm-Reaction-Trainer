@@ -279,9 +279,9 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
 
     ctx.fillStyle = '#e6eef6';
     ctx.font = '18px system-ui';
-    ctx.fillText('Key-Press Rhythm Trainer', 12, 24);
+    ctx.fillText('Key-Press Rhythm Trainer', 105, 24);
     ctx.font = '14px system-ui';
-    ctx.fillText('Press the key shown inside the circle when it reaches the bottom.', 12, 46);
+    ctx.fillText('Press the key shown inside the circle when it reaches the bottom.', 205, 46);
 
     const targetY = h * 0.9;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
