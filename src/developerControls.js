@@ -4,11 +4,16 @@
 export class DeveloperControls {
   constructor({ activationSequence } = {}) {
     this.isActive = false;
+    const defaultActivationSequence = [
+      'Digit1', 'Digit3', 'Digit4'
+    ];
+    // Original console sequence preserved for later:
+    // [
+    //   'ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight',
+    //   'KeyR', 'KeyR', 'KeyT', 'Minus', 'Digit6', 'Period', 'Digit0'
+    // ]
     this.activationSequence = this.normalizeActivationSequence(
-      activationSequence || [
-        'ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight',
-        'KeyR', 'KeyR', 'KeyT', 'Minus', 'Digit6', 'Period', 'Digit0'
-      ]
+      activationSequence || defaultActivationSequence
     );
     this.konamiIndex = 0;
     this.panel = null;
