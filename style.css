@@ -55,18 +55,30 @@ header h1{margin:0 0 12px 0;font-weight:600}
 
 .modal {
   position: fixed;
-  right: 45px;
-  top: 45px;
-  background: var(--bg);
-  border: 1px solid #222;
-  border-radius: 8px;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
   z-index: 1000;
-  max-width: 800px;
-  width: 90%;
+  pointer-events: auto;
+}
+
+.modal[hidden],
+.modal[hidden="true"] {
+  display: none !important;
 }
 
 .modal-content {
   padding: 20px;
+  background: var(--bg);
+  border: 1px solid #222;
+  border-radius: 8px;
+  max-width: 800px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  pointer-events: auto;
 }
 
 .modal-content h2 {
