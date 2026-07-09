@@ -33,6 +33,7 @@ header h1{margin:0 0 12px 0;font-weight:600}
 #keybind-panel{display:grid;gap:8px;padding:12px;border:1px solid #222;border-radius:8px;background:#10131a;margin-bottom:12px}
 .keybind-row{display:grid;grid-template-columns:60px 1fr;gap:8px;align-items:center}
 #keybind-panel input{width:100%;padding:8px;border-radius:6px;border:1px solid #222;background:#0b0c0e;color:var(--accent)}
+#keybind-panel input.capturing{outline:2px solid #4fd1ff;outline-offset:1px;background:#111827}
 #keybind-panel button,#sound-panel label{padding:10px 12px;border-radius:6px;border:1px solid #222;background:#0b0c0e;color:var(--accent);cursor:pointer}
 #sound-panel{display:grid;gap:8px;padding:12px;border:1px solid #222;border-radius:8px;background:#10131a;margin-bottom:12px}
 #sound-panel label{display:flex;align-items:center;gap:8px}
