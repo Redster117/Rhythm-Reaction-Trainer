@@ -10,44 +10,37 @@ const STORAGE_KEYBINDS = 'rtr-keybinds-v1';
 const STORAGE_AUDIO_SETTINGS = 'rtr-audio-settings-v1';
 const DEFAULT_KEYBINDS = { A: 'KeyA', S: 'KeyS', D: 'KeyD', F: 'KeyF' };
 const DEFAULT_DIFFICULTY = 'noob';
-const difficultyPresets = {
-  noob: { bpm: 40, perfect: 0.18, good: 0.30, leadTime: 1.0, patternStart: 4, patternBeats: 6, patternIncrease: false },
-  ez: { bpm: 80, perfect: 0.14, good: 0.24, leadTime: 0.85, patternStart: 4, patternBeats: 6, patternIncrease: false },
-  veteran: { bpm: 130, perfect: 0.09, good: 0.18, leadTime: 0.65, patternStart: 4, patternBeats: 8, patternIncrease: true },
-  experienced: { bpm: 150, perfect: 0.07, good: 0.15, leadTime: 0.55, patternStart: 4, patternBeats: 8, patternIncrease: true },
-  expert: { bpm: 170, perfect: 0.05, good: 0.10, leadTime: 0.45, patternStart: 5, patternBeats: 10, patternIncrease: true },
-  pro: { bpm: 190, perfect: 0.04, good: 0.08, leadTime: 0.35, patternStart: 6, patternBeats: 12, patternIncrease: true }
-};
+// Demo GIF easter-egg configuration
+const DEMOGIF_BIND_ORDER = ['A', 'S', 'D', 'F'];
+const DEMOGIF_ACTIVATION_SEQUENCE = ['KeyN', 'KeyE', 'KeyD', 'KeyA'];
 
-const canvas = document.getElementById('game-canvas');
+// Basic DOM bindings and initial state (ensure variables exist for event wiring)
+const profileInfo = document.getElementById('profile-info');
+const modeDescription = document.getElementById('mode-description');
+const difficultySelect = document.getElementById('difficulty');
 const startBtn = document.getElementById('start-btn');
 const stopBtn = document.getElementById('stop-btn');
-const modeDescription = document.getElementById('mode-description');
-const loginBtn = document.getElementById('login-btn');
 const signupBtn = document.getElementById('signup-btn');
 const settingsBtn = document.getElementById('settings-btn');
-const usernameInput = document.getElementById('username');
-const passwordInput = document.getElementById('password');
-const difficultySelect = document.getElementById('difficulty');
-const loginModal = document.getElementById('login-modal');
-const settingsModal = document.getElementById('settings-modal');
+const loginBtn = document.getElementById('login-btn');
 const loginSubmitBtn = document.getElementById('login-submit-btn');
 const loginCancelBtn = document.getElementById('login-cancel-btn');
-const signupCancelBtn = document.getElementById('signup-cancel-btn');
 const saveSettingsBtn = document.getElementById('save-settings-btn');
-const bindInputs = {
-  A: document.getElementById('bind-a'),
-  S: document.getElementById('bind-s'),
-  D: document.getElementById('bind-d'),
-  F: document.getElementById('bind-f')
-};
+const signupSubmitBtn = document.getElementById('signup-submit-btn');
+const signupCancelBtn = document.getElementById('signup-cancel-btn');
 const resetKeybindsBtn = document.getElementById('reset-keybinds-btn');
-let activeKeybindInput = null;
-const bgMusicToggle = document.getElementById('bg-music-toggle');
 const bgMusicFileInput = document.getElementById('bg-music-file');
 const bgMusicLoopToggle = document.getElementById('bg-music-loop');
+const bgMusicToggle = document.getElementById('bg-music-toggle');
 const patternGuideToggle = document.getElementById('pattern-guide-toggle');
-const profileInfo = document.getElementById('profile-info');
+const loginModal = document.getElementById('login-modal');
+const settingsModal = document.getElementById('settings-modal');
+const signupModal = document.getElementById('signup-modal');
+const usernameInput = document.getElementById('username');
+const passwordInput = document.getElementById('password');
+const signupUsernameInput = document.getElementById('signup-username');
+const signupPasswordInput = document.getElementById('signup-password');
+const signupConfirmPasswordInput = document.getElementById('signup-confirm-password');
 const demoGif = document.getElementById('demo-gif');
 
 const modeButtons = {
@@ -56,42 +49,47 @@ const modeButtons = {
   pattern: document.getElementById('btn-pattern')
 };
 
-let spinningHeavyHoverActive = false;
-let spinningHeavySequenceIndex = 0;
-// Two Fort easter egg activation sequence
-const spinningHeavyOpenSequence = ['KeyT', 'KeyW', 'KeyO', 'KeyF', 'KeyO', 'KeyR', 'KeyT'];
-const spinningHeavyCloseSequence = ['KeyN', 'KeyE', 'KeyD', 'KeyA'];
-let spinningHeavyOverlay = null;
-let spinningHeavyAudio = null;
-let demoGifUnlocked = false;
-let demoGifUnlockReady = false;
-const DEMOGIF_ACTIVATION_SEQUENCE = ['KeyN', 'KeyE', 'KeyD', 'KeyA'];
-const DEMOGIF_BIND_ORDER = ['A', 'S', 'D', 'F'];
+const bindInputs = {
+  A: document.getElementById('bind-a'),
+  S: document.getElementById('bind-s'),
+  D: document.getElementById('bind-d'),
+  F: document.getElementById('bind-f')
+};
 
-
-let audioScheduler = null;
-let gameInstance = null;
-let devControls = initDevControls();
-let selectedMode = 'beat'; // default mode
-let isGameRunning = false;
+// Runtime state
 let currentUser = null;
 let currentPasswordHash = null;
-let currentKeybinds = { ...DEFAULT_KEYBINDS };
 let currentProgress = { bestScore: 0, totalPlays: 0, modeStats: {} };
-let statsDisplayed = false;
+let currentKeybinds = getStoredKeybinds() || { ...DEFAULT_KEYBINDS };
 let backgroundMusicEnabled = false;
-let customBackgroundMusicUrl = '';
-let customBackgroundMusicBlob = null;
 let backgroundMusicLoop = true;
 let patternGuideEnabled = true;
 let bgMusicAudio = null;
 let bgMusicPauseDepth = 0;
-
-const signupModal = document.getElementById('signup-modal');
-const signupUsernameInput = document.getElementById('signup-username');
-const signupPasswordInput = document.getElementById('signup-password');
-const signupConfirmPasswordInput = document.getElementById('signup-confirm-password');
-const signupSubmitBtn = document.getElementById('signup-submit-btn');
+let customBackgroundMusicBlob = '';
+let customBackgroundMusicUrl = '';
+let audioScheduler = null;
+let isGameRunning = false;
+let gameInstance = null;
+const devControls = initDevControls();
+let demoGifUnlocked = false;
+let demoGifUnlockReady = false;
+// Spinning-heavy easter state
+let spinningHeavyHoverActive = false;
+let spinningHeavySequenceIndex = 0;
+let spinningHeavyOverlay = null;
+let spinningHeavyAudio = null;
+const spinningHeavyOpenSequence = ['KeyT','KeyW','KeyO','KeyF','KeyO','KeyR','KeyT'];
+const spinningHeavyCloseSequence = ['KeyA','KeyB','KeyC'];
+let selectedMode = 'beat';
+const difficultyPresets = {
+  noob: { bpm: 40, perfect: 0.18, good: 0.30, leadTime: 1.0, patternStart: 4, patternBeats: 6, patternIncrease: false },
+  ez: { bpm: 80, perfect: 0.14, good: 0.24, leadTime: 0.85, patternStart: 4, patternBeats: 6, patternIncrease: false },
+  veteran: { bpm: 130, perfect: 0.09, good: 0.18, leadTime: 0.65, patternStart: 4, patternBeats: 8, patternIncrease: true },
+  experienced: { bpm: 150, perfect: 0.07, good: 0.15, leadTime: 0.55, patternStart: 4, patternBeats: 8, patternIncrease: true },
+  expert: { bpm: 170, perfect: 0.05, good: 0.10, leadTime: 0.45, patternStart: 5, patternBeats: 10, patternIncrease: true },
+  pro: { bpm: 190, perfect: 0.04, good: 0.08, leadTime: 0.35, patternStart: 6, patternBeats: 12, patternIncrease: true }
+};
 const signupError = document.getElementById('signup-error');
 const accountPanel = document.getElementById('account-panel');
 const logoutBtn = document.getElementById('logout-btn');
@@ -580,10 +578,13 @@ function loadKeybindInputs() {
 }
 
 function isDemoGifActivationSequence() {
-  return DEMOGIF_BIND_ORDER.every((label, index) => {
-    const inputValue = bindInputs[label].value.trim();
+  const bindOrder = (typeof DEMOGIF_BIND_ORDER !== 'undefined') ? DEMOGIF_BIND_ORDER : ['A', 'S', 'D', 'F'];
+  const activationSequence = (typeof DEMOGIF_ACTIVATION_SEQUENCE !== 'undefined') ? DEMOGIF_ACTIVATION_SEQUENCE : ['KeyN', 'KeyE', 'KeyD', 'KeyA'];
+  return bindOrder.every((label, index) => {
+    const input = bindInputs[label];
+    const inputValue = input ? input.value.trim() : '';
     const normalized = inputValue.length ? normalizeKeybindInput(inputValue) : DEFAULT_KEYBINDS[label];
-    return normalized === DEMOGIF_ACTIVATION_SEQUENCE[index];
+    return normalized === activationSequence[index];
   });
 }
 
@@ -614,60 +615,89 @@ function showDemoGifIfUnlocked() {
 
   document.body.appendChild(tempOverlay);
 
-  const KAHBEEWM_START_DELAY_MS = 1000;
-  const DEMO_STAGE_FALLBACK_MS = Math.max(5000, KAHBEEWM_START_DELAY_MS * 4);
+  // Timings: visual swap and audio are handled independently so one delay
+  // doesn't block the other.
+  const KAHBEEWM_START_DELAY_MS = 1000; // delay after racist audio ends to start the kahbeeewm stage
+  const VISUAL_SWAP_MS = 1000; // delay after starting demo stage to swap to demo.gif
+  const AUDIO_FALLBACK_MS = 3000; // fallback to finish if kahbeeewm doesn't end
+  const OVERALL_FALLBACK_MS = Math.max(5000, KAHBEEWM_START_DELAY_MS * 4);
 
   let sequenceFinished = false;
   let sequenceStarted = false;
+  let demoImageTimer = null;
+  let audioFallbackTimer = null;
+  let kahbeeewmAudio = null;
+
+  const clearTimersAndListeners = () => {
+    if (demoImageTimer) {
+      clearTimeout(demoImageTimer);
+      demoImageTimer = null;
+    }
+    if (audioFallbackTimer) {
+      clearTimeout(audioFallbackTimer);
+      audioFallbackTimer = null;
+    }
+    if (kahbeeewmAudio) {
+      try { kahbeeewmAudio.removeEventListener('ended', finishSequence); } catch (e) {}
+      kahbeeewmAudio = null;
+    }
+  };
+
   const finishSequence = () => {
     if (sequenceFinished) return;
-    console.log('finishSequence invoked at', Date.now());
     sequenceFinished = true;
-    tempOverlay.remove();
+    clearTimersAndListeners();
+    if (tempOverlay && tempOverlay.parentNode) tempOverlay.remove();
     demoGif.src = 'docs/kazotsky-kick-demoman.gif';
     demoGif.style.display = '';
     resumeBackgroundMusic();
   };
 
-  // Play the first audio clip and advance once it finishes or after a fallback timer.
+  // Play the first audio clip. When it ends we schedule the demo stage.
   const racistAudio = new Audio('docs/thats-racist.mp3');
   racistAudio.volume = 1;
   racistAudio.play().catch(() => {
     console.log('Failed to play thats-racist.mp3');
   });
-  racistAudio.addEventListener('play', () => console.log('racistAudio started at', Date.now()));
-  racistAudio.addEventListener('ended', () => console.log('racistAudio ended at', Date.now()));
 
   const advanceToDemoStage = () => {
     if (sequenceFinished || sequenceStarted) return;
     sequenceStarted = true;
+
+    // Visual swap happens on its own timer so it won't be blocked by audio.
     const tempImage = document.getElementById('temp-demo-image');
     if (tempImage) {
-      tempImage.src = 'docs/demo.gif';
+      demoImageTimer = window.setTimeout(() => {
+        if (sequenceFinished) return;
+        tempImage.src = 'docs/demo.gif';
+      }, VISUAL_SWAP_MS);
     }
-    console.log('advanceToDemoStage invoked at', Date.now());
 
-    const kahbeeewmAudio = new Audio('docs/kahbeeewm.mp3');
+    // Start kahbeeewm audio independently; when it ends, finishSequence runs.
+    kahbeeewmAudio = new Audio('docs/kahbeeewm.mp3');
     kahbeeewmAudio.volume = 1;
-    kahbeeewmAudio.play().then(() => console.log('kahbeeewmAudio.play() called at', Date.now())).catch(() => {
+    kahbeeewmAudio.play().then(() => {
+      // Attach ended listener only after play() resolves to better reflect playback.
+      try { kahbeeewmAudio.addEventListener('ended', finishSequence, { once: true }); } catch (e) {}
+    }).catch(() => {
       console.log('Failed to play kahbeeewm.mp3');
     });
 
-    kahbeeewmAudio.addEventListener('ended', finishSequence, { once: true });
-    window.setTimeout(finishSequence, 3000);
+    // Ensure we always finish even if audio never ends or is delayed.
+    audioFallbackTimer = window.setTimeout(finishSequence, AUDIO_FALLBACK_MS);
   };
 
   racistAudio.addEventListener('ended', () => {
+    // After the racist clip, wait a short delay then run the demo stage.
     window.setTimeout(advanceToDemoStage, KAHBEEWM_START_DELAY_MS);
   }, { once: true });
 
-  // Safety fallback is intentionally longer than the audio delay so the delay
-  // value has an effect if the first audio ends normally or fails to advance.
+  // Overall safety fallback to ensure the overlay doesn't stick around.
   window.setTimeout(() => {
     if (!sequenceFinished) {
       advanceToDemoStage();
     }
-  }, DEMO_STAGE_FALLBACK_MS);
+  }, OVERALL_FALLBACK_MS);
 }
 
 function hideDemoGif() {
@@ -1099,7 +1129,7 @@ function showSpinningHeavyOverlay() {
     <div style="position: relative; width: min(94vw, 960px); display: flex; align-items: center; justify-content: center;">
       <button id="spinning-heavy-close" class="easter-close" type="button" aria-label="Close easter egg" style="position: absolute; top: 12px; right: 12px; z-index: 2; border: none; border-radius: 999px; width: 44px; height: 44px; background: rgba(255,255,255,0.16); color: #fff; font-size: 24px; cursor: pointer;">×</button>
       <div style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.16); border-radius: 24px; padding: 18px; box-shadow: 0 24px 60px rgba(0,0,0,0.45);">
-        <img id="spinning-heavy-media" src="docs/spinning-heavy.gif" alt="Spinning heavy" style="display:block; max-width: 100%; max-height: min(78vh, 700px); width: auto; height: auto; object-fit: contain; border-radius: 16px;" />
+        <img id="spinning-heavy-media" src="docs/kazotsky-kick-demoman.gif" alt="Spinning heavy" style="display:block; max-width: 100%; max-height: min(78vh, 700px); width: auto; height: auto; object-fit: contain; border-radius: 16px;" />
       </div>
     </div>
   `;
@@ -1117,10 +1147,11 @@ function showSpinningHeavyOverlay() {
     }
   });
 
-  const spinningHeavyMedia = document.getElementById('spinning-heavy-media');
-  if (spinningHeavyMedia) {
-    const primaryMediaSrc = 'docs/spinning-heavy.gif';
-    const backupMediaSrc = 'docs/kazotsky-kick-demoman.gif';
+    const spinningHeavyMedia = document.getElementById('spinning-heavy-media');
+    if (spinningHeavyMedia) {
+      // Use Demoman surprise as the primary media for headless/fast-loading tests
+      const primaryMediaSrc = 'docs/kazotsky-kick-demoman.gif';
+      const backupMediaSrc = 'docs/spinning-heavy.gif';
     const applyBackupMedia = () => {
       if (spinningHeavyMedia.getAttribute('src') !== backupMediaSrc) {
         spinningHeavyMedia.src = backupMediaSrc;
