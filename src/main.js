@@ -614,12 +614,17 @@ function showDemoGifIfUnlocked() {
 
   document.body.appendChild(tempOverlay);
 
+  const KAHBEEWM_START_DELAY_MS = 1000;
+  const DEMO_STAGE_FALLBACK_MS = Math.max(5000, KAHBEEWM_START_DELAY_MS * 4);
+
   let sequenceFinished = false;
+  let sequenceStarted = false;
   const finishSequence = () => {
     if (sequenceFinished) return;
+    console.log('finishSequence invoked at', Date.now());
     sequenceFinished = true;
     tempOverlay.remove();
-    demoGif.src = 'docs/demo.gif';
+    demoGif.src = 'docs/kazotsky-kick-demoman.gif';
     demoGif.style.display = '';
     resumeBackgroundMusic();
   };
@@ -630,33 +635,39 @@ function showDemoGifIfUnlocked() {
   racistAudio.play().catch(() => {
     console.log('Failed to play thats-racist.mp3');
   });
+  racistAudio.addEventListener('play', () => console.log('racistAudio started at', Date.now()));
+  racistAudio.addEventListener('ended', () => console.log('racistAudio ended at', Date.now()));
 
   const advanceToDemoStage = () => {
+    if (sequenceFinished || sequenceStarted) return;
+    sequenceStarted = true;
     const tempImage = document.getElementById('temp-demo-image');
     if (tempImage) {
       tempImage.src = 'docs/demo.gif';
     }
+    console.log('advanceToDemoStage invoked at', Date.now());
 
-    const kahbeewmAudio = new Audio('docs/kahbeeewm.mp3');
-    kahbeewmAudio.volume = 1;
-    kahbeewmAudio.play().catch(() => {
+    const kahbeeewmAudio = new Audio('docs/kahbeeewm.mp3');
+    kahbeeewmAudio.volume = 1;
+    kahbeeewmAudio.play().then(() => console.log('kahbeeewmAudio.play() called at', Date.now())).catch(() => {
       console.log('Failed to play kahbeeewm.mp3');
     });
 
-    kahbeewmAudio.addEventListener('ended', finishSequence, { once: true });
-    window.setTimeout(finishSequence, 1800);
+    kahbeeewmAudio.addEventListener('ended', finishSequence, { once: true });
+    window.setTimeout(finishSequence, 3000);
   };
 
   racistAudio.addEventListener('ended', () => {
-    window.setTimeout(advanceToDemoStage, 500);
+    window.setTimeout(advanceToDemoStage, KAHBEEWM_START_DELAY_MS);
   }, { once: true });
 
-  // Fall back to ensure the sequence still completes even if autoplay or media timing is inconsistent.
+  // Safety fallback is intentionally longer than the audio delay so the delay
+  // value has an effect if the first audio ends normally or fails to advance.
   window.setTimeout(() => {
     if (!sequenceFinished) {
       advanceToDemoStage();
     }
-  }, 3000);
+  }, DEMO_STAGE_FALLBACK_MS);
 }
 
 function hideDemoGif() {
@@ -1088,7 +1099,7 @@ function showSpinningHeavyOverlay() {
     <div style="position: relative; width: min(94vw, 960px); display: flex; align-items: center; justify-content: center;">
       <button id="spinning-heavy-close" class="easter-close" type="button" aria-label="Close easter egg" style="position: absolute; top: 12px; right: 12px; z-index: 2; border: none; border-radius: 999px; width: 44px; height: 44px; background: rgba(255,255,255,0.16); color: #fff; font-size: 24px; cursor: pointer;">×</button>
       <div style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.16); border-radius: 24px; padding: 18px; box-shadow: 0 24px 60px rgba(0,0,0,0.45);">
-        <img id="spinning-heavy-media" src="docs/kazotsky-kick-demoman.gif" alt="Demoman surprise" style="display:block; max-width: 100%; max-height: min(78vh, 700px); width: auto; height: auto; object-fit: contain; border-radius: 16px;" />
+        <img id="spinning-heavy-media" src="docs/spinning-heavy.gif" alt="Spinning heavy" style="display:block; max-width: 100%; max-height: min(78vh, 700px); width: auto; height: auto; object-fit: contain; border-radius: 16px;" />
       </div>
     </div>
   `;
@@ -1108,12 +1119,12 @@ function showSpinningHeavyOverlay() {
 
   const spinningHeavyMedia = document.getElementById('spinning-heavy-media');
   if (spinningHeavyMedia) {
-    const primaryMediaSrc = 'docs/kazotsky-kick-demoman.gif';
-    const backupMediaSrc = 'docs/spinning-heavy.gif';
+    const primaryMediaSrc = 'docs/spinning-heavy.gif';
+    const backupMediaSrc = 'docs/kazotsky-kick-demoman.gif';
     const applyBackupMedia = () => {
       if (spinningHeavyMedia.getAttribute('src') !== backupMediaSrc) {
         spinningHeavyMedia.src = backupMediaSrc;
-        spinningHeavyMedia.alt = 'Spinning heavy fallback';
+        spinningHeavyMedia.alt = 'Demoman surprise fallback';
       }
     };
 
