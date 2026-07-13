@@ -80,7 +80,6 @@ let spinningHeavySequenceIndex = 0;
 let spinningHeavyOverlay = null;
 let spinningHeavyAudio = null;
 const spinningHeavyOpenSequence = ['KeyT','KeyW','KeyO','KeyF','KeyO','KeyR','KeyT'];
-const spinningHeavyCloseSequence = ['KeyA','KeyB','KeyC'];
 let selectedMode = 'beat';
 const difficultyPresets = {
   noob: { bpm: 40, perfect: 0.18, good: 0.30, leadTime: 1.0, patternStart: 4, patternBeats: 6, patternIncrease: false },
@@ -591,9 +590,6 @@ function isDemoGifActivationSequence() {
 function showDemoGifIfUnlocked() {
   if (!demoGifUnlocked || !demoGif) return;
 
-  pauseBackgroundMusic();
-  if (document.getElementById('temp-demo-overlay')) return;
-
   // Create temporary overlay for Demoman.png
   const tempOverlay = document.createElement('div');
   tempOverlay.id = 'temp-demo-overlay';
@@ -615,95 +611,49 @@ function showDemoGifIfUnlocked() {
 
   document.body.appendChild(tempOverlay);
 
-  // Timings: visual swap and audio are handled independently so one delay
-  // doesn't block the other.
-  const KAHBEEWM_START_DELAY_MS = 1000; // delay after racist audio ends to start the kahbeeewm stage
-  const VISUAL_SWAP_MS = 1000; // delay after starting demo stage to swap to demo.gif
-  const AUDIO_FALLBACK_MS = 3000; // fallback to finish if kahbeeewm doesn't end
-  const OVERALL_FALLBACK_MS = Math.max(5000, KAHBEEWM_START_DELAY_MS * 4);
-
-  let sequenceFinished = false;
-  let sequenceStarted = false;
-  let demoImageTimer = null;
-  let audioFallbackTimer = null;
-  let kahbeeewmAudio = null;
-
-  const clearTimersAndListeners = () => {
-    if (demoImageTimer) {
-      clearTimeout(demoImageTimer);
-      demoImageTimer = null;
-    }
-    if (audioFallbackTimer) {
-      clearTimeout(audioFallbackTimer);
-      audioFallbackTimer = null;
-    }
-    if (kahbeeewmAudio) {
-      try { kahbeeewmAudio.removeEventListener('ended', finishSequence); } catch (e) {}
-      kahbeeewmAudio = null;
-    }
-  };
-
-  const finishSequence = () => {
-    if (sequenceFinished) return;
-    sequenceFinished = true;
-    clearTimersAndListeners();
-    if (tempOverlay && tempOverlay.parentNode) tempOverlay.remove();
-    demoGif.src = 'docs/kazotsky-kick-demoman.gif';
-    demoGif.style.display = '';
-    resumeBackgroundMusic();
-  };
-
-  // Play the first audio clip. When it ends we schedule the demo stage.
+  // Play thats-racist.mp3
   const racistAudio = new Audio('docs/thats-racist.mp3');
   racistAudio.volume = 1;
   racistAudio.play().catch(() => {
     console.log('Failed to play thats-racist.mp3');
   });
 
-  const advanceToDemoStage = () => {
-    if (sequenceFinished || sequenceStarted) return;
-    sequenceStarted = true;
-
-    // Visual swap happens on its own timer so it won't be blocked by audio.
-    const tempImage = document.getElementById('temp-demo-image');
-    if (tempImage) {
-      demoImageTimer = window.setTimeout(() => {
-        if (sequenceFinished) return;
-        tempImage.src = 'docs/demo.gif';
-      }, VISUAL_SWAP_MS);
-    }
-
-    // Start kahbeeewm audio independently; when it ends, finishSequence runs.
-    kahbeeewmAudio = new Audio('docs/kahbeeewm.mp3');
-    kahbeeewmAudio.volume = 1;
-    kahbeeewmAudio.play().then(() => {
-      // Attach ended listener only after play() resolves to better reflect playback.
-      try { kahbeeewmAudio.addEventListener('ended', finishSequence, { once: true }); } catch (e) {}
-    }).catch(() => {
-      console.log('Failed to play kahbeeewm.mp3');
-    });
-
-    // Ensure we always finish even if audio never ends or is delayed.
-    audioFallbackTimer = window.setTimeout(finishSequence, AUDIO_FALLBACK_MS);
-  };
-
+  // When racist audio ends, wait 0.5 seconds, then switch to demo.gif
   racistAudio.addEventListener('ended', () => {
-    // After the racist clip, wait a short delay then run the demo stage.
-    window.setTimeout(advanceToDemoStage, KAHBEEWM_START_DELAY_MS);
-  }, { once: true });
+    console.log('thats-racist.mp3 ended, starting 0.5s delay');
+    setTimeout(() => {
+      console.log('0.5s delay done, switching to demo.gif');
+      const tempImage = document.getElementById('temp-demo-image');
+      if (tempImage) {
+        tempImage.src = 'docs/demo.gif';
+      }
 
-  // Overall safety fallback to ensure the overlay doesn't stick around.
-  window.setTimeout(() => {
-    if (!sequenceFinished) {
-      advanceToDemoStage();
-    }
-  }, OVERALL_FALLBACK_MS);
+      // Delay kahbeewm start so it ends when demo.gif ends (demo.gif: 2.67s, kahbeewm: 1.23s)
+      setTimeout(() => {
+        console.log('Starting demo resound.mp3 after additional delay');
+        const DemoAudio = new Audio('docs/demo resound.mp3');
+        DemoAudio.volume = 1;
+        DemoAudio.play().catch(() => {
+          console.log('Failed to play demo resound.mp3');
+        });
+
+        // After kahbeewm audio ends, remove overlay and show bottom right gif
+        DemoAudio.addEventListener('ended', () => {
+          console.log('kahbeewm.mp3 ended, removing overlay');
+          tempOverlay.remove();
+          demoGif.src = 'docs/kazotsky-kick-demoman.gif';
+          demoGif.style.display = '';
+        });
+      }, );
+    }, 500);
+  });
 }
 
 function hideDemoGif() {
   if (!demoGif) return;
   demoGif.style.display = 'none';
 }
+
 
 function saveUserData() {
   if (!currentUser || !currentPasswordHash) {
@@ -1073,9 +1023,7 @@ window.addEventListener('keydown', (e) => {
       if (spinningHeavySequenceIndex === spinningHeavyCloseSequence.length) {
         spinningHeavySequenceIndex = 0;
         closeSpinningHeavyOverlay();
-      }
-    } else {
-      spinningHeavySequenceIndex = e.code === spinningHeavyCloseSequence[0] ? 1 : 0;
+      };
     }
   }
 });
@@ -1149,20 +1097,17 @@ function showSpinningHeavyOverlay() {
 
     const spinningHeavyMedia = document.getElementById('spinning-heavy-media');
     if (spinningHeavyMedia) {
-      // Use Demoman surprise as the primary media for headless/fast-loading tests
-      const primaryMediaSrc = 'docs/kazotsky-kick-demoman.gif';
-      const backupMediaSrc = 'docs/spinning-heavy.gif';
-    const applyBackupMedia = () => {
-      if (spinningHeavyMedia.getAttribute('src') !== backupMediaSrc) {
-        spinningHeavyMedia.src = backupMediaSrc;
-        spinningHeavyMedia.alt = 'Demoman surprise fallback';
+      const MediaSrc = 'docs/spinning-heavy.gif';
+    const applyMedia = () => {
+      if (spinningHeavyMedia.getAttribute('src') !== MediaSrc) {
+        spinningHeavyMedia.src = MediaSrc;
       }
     };
 
-    spinningHeavyMedia.addEventListener('error', applyBackupMedia, { once: true });
+    spinningHeavyMedia.addEventListener('error', applyMedia, { once: true });
     window.setTimeout(() => {
-      if (spinningHeavyMedia.getAttribute('src') === primaryMediaSrc && (!spinningHeavyMedia.complete || spinningHeavyMedia.naturalWidth === 0)) {
-        applyBackupMedia();
+      if (spinningHeavyMedia.getAttribute('src') === MediaSrc && (!spinningHeavyMedia.complete || spinningHeavyMedia.naturalWidth === 0)) {
+        applyMedia();
       }
     }, 1500);
   }
@@ -1194,7 +1139,7 @@ function playSpinningHeavyAudio() {
 
   spinningHeavyAudio = new Audio('docs/spinning_heavy_audio.mp3');
   spinningHeavyAudio.loop = true;
-  spinningHeavyAudio.volume = 0.65;
+  spinningHeavyAudio.volume = 1;
   spinningHeavyAudio.play().catch(() => {
     // Autoplay may be blocked; keep the audio object ready for user interaction.
   });
