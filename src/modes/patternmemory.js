@@ -1,5 +1,6 @@
 // src/modes/patternmemory.js
 import { AudioSchedulerPM } from '../audioPatternMemory.js';
+import PatternGuide from '../patternGuide.js';
 
 export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD, difficulty = {}, onGameEnd, debug = false, customPattern = null, showGuide = true } = {}) {
   const ctx = canvas.getContext('2d');
@@ -20,7 +21,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   let goodCount = 0;
   let totalOffset = 0;
 
-  const leadTime = 0.8;
+  let leadTime = 0.8;
   const showDuration = 1.0;
   const inputWindow = 3.0;
 
@@ -51,8 +52,14 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   let devInjectPersistent = false;
   let devAddScore = 0;
   let inputTimeout = null;
+  // Latency calibration / rolling offset (seconds). Positive means display lags real time.
+  let rollingOffset = 0; // seconds
+  const offsetSamples = [];
 
   const countdown = document.getElementById('countdown');
+
+  // Create a reusable guide instance (keeps rendering logic in one place)
+  const guide = new PatternGuide(ctx, canvas, { xPct: 0.5, y: 100, minWidth: 180, height: 56 });
 
   function safeNow() {
     return pmAudioScheduler ? pmAudioScheduler.getCurrentTime() : performance.now() / 1000;
@@ -123,37 +130,18 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     }
 
     if (showGuide && currentTile) {
-      const guideW = Math.max(180, w / 2 - 40);
-      const guideH = 48;
-      const guideX = w / 2 + 18;
-      const guideY = 110;
       const patternDelays = pmAudioScheduler.getBeatPattern(currentTile);
-      const maxDelay = Math.max(...patternDelays, 1);
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
-      ctx.fillRect(guideX, guideY, guideW, guideH);
-      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(guideX + 8, guideY + guideH / 2);
-      ctx.lineTo(guideX + guideW - 8, guideY + guideH / 2);
-      ctx.stroke();
-      patternDelays.forEach((delay, index) => {
-        const px = guideX + 8 + (delay / maxDelay) * (guideW - 16);
-        ctx.strokeStyle = index % 2 ? '#7dd3fc' : '#fca5a5';
-        ctx.beginPath();
-        ctx.moveTo(px, guideY + 8);
-        ctx.lineTo(px, guideY + guideH - 8);
-        ctx.stroke();
-      });
-      const dotProgress = Math.min((now - currentTileFlashTime) / (leadTime + showDuration), 1);
-      const dotX = guideX + 8 + dotProgress * (guideW - 16);
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(dotX, guideY + guideH / 2, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#e6eef6';
-      ctx.font = '12px system-ui';
-      ctx.fillText('Guide: beat markers and moving dot', guideX + 8, guideY - 6);
+      let timelineTimes = [];
+      if (state === 'input' && expectedClickTimes && expectedClickTimes.length) {
+        timelineTimes = expectedClickTimes.slice();
+      } else {
+        const tentativeStart = currentTileFlashTime + leadTime;
+        timelineTimes = patternDelays.map(d => tentativeStart + d);
+      }
+
+      // Update and draw the centralized guide renderer
+      guide.update({ timelineTimes, userPresses, rollingOffset, leadTime, tolerance: getTimingTolerance(), visible: true });
+      guide.draw(now);
     }
 
     // HUD info
@@ -252,8 +240,13 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       let allPerfect = true;
       let allGood = true;
 
+      // Compare adjusted press times (apply rollingOffset) to expectedClickTimes
+      const measuredOffsets = [];
       for (let i = 0; i < requiredClicks; i++) {
-        const diff = userPresses[i] - expectedClickTimes[i];
+        const adjustedPress = userPresses[i] + rollingOffset;
+        const diff = adjustedPress - expectedClickTimes[i];
+        // collect raw offset for calibration (expected - actual)
+        measuredOffsets.push(expectedClickTimes[i] - userPresses[i]);
         if (Math.abs(diff) <= tolerance.perfect) {
           continue;
         }
@@ -264,6 +257,26 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
         allGood = false;
         allPerfect = false;
         break;
+      }
+
+      // Update rolling offset using exponential moving average of measured offsets
+      if (measuredOffsets.length) {
+        const avgMeasured = measuredOffsets.reduce((a, b) => a + b, 0) / measuredOffsets.length;
+        offsetSamples.push(avgMeasured);
+        // keep sample history short
+        if (offsetSamples.length > 30) offsetSamples.shift();
+        // EMA smoothing
+        rollingOffset = rollingOffset * 0.88 + avgMeasured * 0.12;
+
+        // Adaptive leadTime: if users are consistently late, increase leadTime; if early, decrease
+        const recentAvg = offsetSamples.reduce((a, b) => a + b, 0) / offsetSamples.length;
+        if (recentAvg < -0.06) {
+          // user tends to be late (negative measured expected - actual), increase leadTime
+          leadTime = Math.min(1.5, leadTime + 0.05);
+        } else if (recentAvg > 0.06) {
+          // user early, decrease leadTime slightly
+          leadTime = Math.max(0.3, leadTime - 0.05);
+        }
       }
 
       if (allPerfect) {
@@ -431,10 +444,11 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     if (clickCount >= requiredClicks) {
       return false;
     }
-
     const allowedEarly = getTimingTolerance().good;
     const expectedTime = expectedClickTimes[clickCount];
-    const diff = clickTime - expectedTime;
+    // apply rollingOffset to the user's click time for validation
+    const adjusted = clickTime + rollingOffset;
+    const diff = adjusted - expectedTime;
 
     if (diff < -allowedEarly || diff > allowedEarly) {
       return false;

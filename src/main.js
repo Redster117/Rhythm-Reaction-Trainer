@@ -56,6 +56,12 @@ const bindInputs = {
   F: document.getElementById('bind-f')
 };
 
+// Missing runtime globals
+let activeKeybindInput = null;
+let statsDisplayed = false;
+const canvas = document.getElementById('game-canvas');
+const spinningHeavyCloseSequence = ['KeyT','KeyW','KeyO','KeyF','KeyO','KeyR','KeyT'];
+
 // Runtime state
 let currentUser = null;
 let currentPasswordHash = null;
@@ -618,33 +624,53 @@ function showDemoGifIfUnlocked() {
     console.log('Failed to play thats-racist.mp3');
   });
 
-  // When racist audio ends, wait 0.5 seconds, then switch to demo.gif
+  // When racist audio ends, wait 500ms then start demo.gif and demo resound together
+  // Ensure they both end at the same time by looping the audio until the gif duration elapses.
   racistAudio.addEventListener('ended', () => {
-    console.log('thats-racist.mp3 ended, starting 0.5s delay');
+    console.log('thats-racist.mp3 ended, starting demo sequence after 500ms');
     setTimeout(() => {
-      console.log('0.5s delay done, switching to demo.gif');
       const tempImage = document.getElementById('temp-demo-image');
       if (tempImage) {
         tempImage.src = 'docs/demo.gif';
       }
 
-      // Delay kahbeewm start so it ends when demo.gif ends (demo.gif: 2.67s, kahbeewm: 1.23s)
-      setTimeout(() => {
-        console.log('Starting demo resound.mp3 after additional delay');
-        const DemoAudio = new Audio('docs/demo resound.mp3');
-        DemoAudio.volume = 1;
-        DemoAudio.play().catch(() => {
-          console.log('Failed to play demo resound.mp3');
-        });
+      // Known demo GIF duration (seconds). Adjust if file changes.
+      const DEMO_GIF_DURATION = 2.67;
+      const startTime = Date.now();
+      const targetEndTime = startTime + Math.round(DEMO_GIF_DURATION * 1000);
 
-        // After kahbeewm audio ends, remove overlay and show bottom right gif
-        DemoAudio.addEventListener('ended', () => {
-          console.log('kahbeewm.mp3 ended, removing overlay');
-          tempOverlay.remove();
-          demoGif.src = 'docs/kazotsky-kick-demoman.gif';
-          demoGif.style.display = '';
-        });
-      }, );
+      const DemoAudio = new Audio('docs/demo resound.mp3');
+      DemoAudio.volume = 1;
+
+      // Try to play immediately; autoplay may be blocked, but we'll still schedule the overlay removal
+      DemoAudio.play().catch(() => {
+        console.log('Failed to play demo resound.mp3 immediately (autoplay?), will attempt when allowed.');
+      });
+
+      // If the audio ends before the GIF, replay it until GIF duration has elapsed
+      const onAudioEnded = () => {
+        if (Date.now() < targetEndTime) {
+          // restart from beginning
+          DemoAudio.currentTime = 0;
+          DemoAudio.play().catch(() => {});
+        }
+      };
+
+      DemoAudio.addEventListener('ended', onAudioEnded);
+
+      // Remove overlay and show bottom-right gif when the GIF duration has elapsed
+      const remaining = targetEndTime - Date.now();
+      setTimeout(() => {
+        try {
+          DemoAudio.removeEventListener('ended', onAudioEnded);
+          DemoAudio.pause();
+          DemoAudio.currentTime = 0;
+        } catch (e) {}
+        console.log('demo sequence finished, removing overlay');
+        tempOverlay.remove();
+        demoGif.src = 'docs/kazotsky-kick-demoman.gif';
+        demoGif.style.display = '';
+      }, Math.max(0, remaining));
     }, 500);
   });
 }

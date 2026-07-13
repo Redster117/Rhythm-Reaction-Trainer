@@ -19,6 +19,19 @@ export class DeveloperControls {
     this.panel = null;
     this.gameInstance = null;
     this.patternConfig = Array(10).fill(0); // 0 means none
+    this.docsMediaAssets = [
+      { key: 'Demoman.png', label: 'Demoman.png', src: 'docs/Demoman.png', type: 'image' },
+      { key: 'demo.gif', label: 'demo.gif', src: 'docs/demo.gif', type: 'image' },
+      { key: 'kazotsky-kick-demoman.gif', label: 'kazotsky-kick-demoman.gif', src: 'docs/kazotsky-kick-demoman.gif', type: 'image' },
+      { key: 'spinning-heavy.gif', label: 'spinning-heavy.gif', src: 'docs/spinning-heavy.gif', type: 'image' },
+      { key: 'Caked up Heavy Beat.mp4', label: 'Caked up Heavy Beat.mp4', src: 'docs/Caked up Heavy Beat.mp4', type: 'video' },
+      { key: 'Heavy Beat 2.mp4', label: 'Heavy Beat 2.mp4', src: 'docs/Heavy Beat 2.mp4', type: 'video' },
+      { key: 'Heavy Beats.mp4', label: 'Heavy Beats.mp4', src: 'docs/Heavy Beats.mp4', type: 'video' },
+      { key: 'thats-racist.mp3', label: 'thats-racist.mp3', src: 'docs/thats-racist.mp3', type: 'audio' },
+      { key: 'demo resound.mp3', label: 'demo resound.mp3', src: 'docs/demo resound.mp3', type: 'audio' },
+      { key: 'demo old sound.mp3', label: 'demo old sound.mp3', src: 'docs/demo old sound.mp3', type: 'audio' },
+      { key: 'spinning_heavy_audio.mp3', label: 'spinning_heavy_audio.mp3', src: 'docs/spinning_heavy_audio.mp3', type: 'audio' }
+    ];
     this.isActive = localStorage.getItem('rtr-dev-console-open') === '1';
     this.forceMode = localStorage.getItem('rtr-dev-force-mode') || null;
     this.afkTimer = null;
@@ -120,6 +133,17 @@ export class DeveloperControls {
       </div>
 
       <div style="margin-bottom: 12px;">
+        <label style="display: block; margin-bottom: 4px;">Docs media preview:</label>
+        <select id="dev-media-select" style="width: 100%; padding: 6px; margin-bottom: 8px; border-radius: 4px; border: 1px solid #ff0000; background: #071226; color: #fff; font-size: 11px;">
+          <option value="">Select docs media</option>
+          ${this.docsMediaAssets.map((asset) => `<option value="${asset.key}">${asset.label}</option>`).join('')}
+        </select>
+        <div id="dev-media-preview" style="background: rgba(0,0,0,0.12); border: 1px solid rgba(255,255,255,0.10); border-radius: 6px; min-height: 120px; display: flex; align-items: center; justify-content: center; padding: 10px; color: #ccc; font-size: 11px;">
+          <span>No media selected.</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 12px;">
         <label style="display: block; margin-bottom: 4px;">Game Controls:</label>
         <button id="dev-reset-game" style="width: 100%; padding: 6px; margin-bottom: 4px; background: #ffaa00; color: #071226; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Refresh Page</button>
         <label style="display: block; margin-bottom: 4px; font-size: 11px;">Score injection amount:</label>
@@ -147,6 +171,9 @@ export class DeveloperControls {
         const pos = parseInt(e.target.dataset.pos);
         const value = parseInt(e.target.value);
         this.updatePatternConfig(pos, value);
+      }
+      if (e.target.id === 'dev-media-select') {
+        this.renderMediaPreview(e.target.value);
       }
     });
 
@@ -340,6 +367,55 @@ export class DeveloperControls {
       this.activationSequence = this.normalizeActivationSequence(sequence);
       this.konamiIndex = 0;
       this.updateActivationInstructions();
+    }
+  }
+
+  renderMediaPreview(assetKey) {
+    const previewContainer = document.getElementById('dev-media-preview');
+    if (!previewContainer) return;
+
+    previewContainer.innerHTML = '';
+    if (!assetKey) {
+      previewContainer.textContent = 'No media selected.';
+      return;
+    }
+
+    const asset = this.docsMediaAssets.find((item) => item.key === assetKey);
+    if (!asset) {
+      previewContainer.textContent = 'Media asset not found.';
+      return;
+    }
+
+    if (asset.type === 'image') {
+      const img = document.createElement('img');
+      img.src = asset.src;
+      img.alt = asset.label;
+      img.style.maxWidth = '100%';
+      img.style.maxHeight = '180px';
+      img.style.objectFit = 'contain';
+      previewContainer.appendChild(img);
+    } else if (asset.type === 'video') {
+      const video = document.createElement('video');
+      video.src = asset.src;
+      video.controls = true;
+      video.autoplay = false;
+      video.style.maxWidth = '100%';
+      video.style.maxHeight = '180px';
+      previewContainer.appendChild(video);
+    } else if (asset.type === 'audio') {
+      const audio = document.createElement('audio');
+      audio.src = asset.src;
+      audio.controls = true;
+      audio.style.width = '100%';
+      previewContainer.appendChild(audio);
+      const label = document.createElement('div');
+      label.textContent = asset.label;
+      label.style.marginTop = '6px';
+      label.style.fontSize = '10px';
+      label.style.color = '#ccc';
+      previewContainer.appendChild(label);
+    } else {
+      previewContainer.textContent = 'Unsupported media type.';
     }
   }
 
