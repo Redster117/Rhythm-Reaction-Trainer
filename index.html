@@ -44,7 +44,10 @@
     <div id="profile-info" aria-live="polite"></div>
 
     <div id="game-container">
-      <canvas id="game-canvas" width="800" height="500" aria-label="Game canvas"></canvas>
+      <div id="pattern-canvas-wrap">
+        <canvas id="game-canvas" width="800" height="500" aria-label="Game canvas"></canvas>
+        <canvas id="pattern-guide-canvas" width="360" height="120" aria-label="Pattern guide" hidden></canvas>
+      </div>
       <div id="countdown" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:48px; color:white; display:none; pointer-events:none;">3</div>
       <div id="hud" role="status">
         <div id="score">Score: 0</div>
@@ -55,8 +58,8 @@
       </div>
     </div>
 
-    <!-- Tutorial GIF (bottom-right under die) -->
-    <img id="demo-gif" src="docs/demo.gif" alt="Pattern tutorial" class="demo-gif" visible />
+    <!-- Demoman GIF (bottom-right) -->
+    <img id="demo-gif" src="docs/demo.gif" alt="Demoman" class="demo-gif" visible />
 
 
     <!-- Modals -->
@@ -65,7 +68,7 @@
         <h2>Log in</h2>
         <form id="login-form" novalidate>
           <label for="username">Username</label>
-          <input id="username" placeholder="Username" aria-label="Username" />
+          <input id="username" placeholder="Username" aria-label="Username" autocomplete="username" />
           <label for="password">Password</label>
           <input id="password" type="password" placeholder="Password" aria-label="Password" autocomplete="current-password" />
           <div class="modal-buttons">
@@ -150,7 +153,7 @@
         <h2>Sign Up</h2>
         <form id="signup-form" novalidate>
           <label for="signup-username">Username</label>
-          <input id="signup-username" placeholder="Username (3-16 chars, letters, numbers, -, _)" aria-label="Username" />
+          <input id="signup-username" placeholder="Username (3-16 chars, letters, numbers, -, _)" aria-label="Username" autocomplete="username" />
           <label for="signup-password">Password</label>
           <input id="signup-password" type="password" placeholder="Password (min 8 chars, include upper, lower, number, special)" aria-label="Password" autocomplete="new-password" />
           <label for="signup-confirm-password">Confirm Password</label>

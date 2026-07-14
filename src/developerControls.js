@@ -1,4 +1,6 @@
 // src/developerControls.js
+import { AudioSchedulerPM } from './audioPatternMemory.js';
+import PatternGuide from './patternGuide.js';
 // Secret developer console with Konami code activation
 
 export class DeveloperControls {
@@ -22,15 +24,16 @@ export class DeveloperControls {
     this.docsMediaAssets = [
       { key: 'Demoman.png', label: 'Demoman.png', src: 'docs/Demoman.png', type: 'image' },
       { key: 'demo.gif', label: 'demo.gif', src: 'docs/demo.gif', type: 'image' },
-      { key: 'kazotsky-kick-demoman.gif', label: 'kazotsky-kick-demoman.gif', src: 'docs/kazotsky-kick-demoman.gif', type: 'image' },
-      { key: 'spinning-heavy.gif', label: 'spinning-heavy.gif', src: 'docs/spinning-heavy.gif', type: 'image' },
+      { key: 'kazotsky kick demoman.gif', label: 'kazotsky kick demoman.gif', src: 'docs/kazotsky kick demoman.gif', type: 'image' },
+      { key: 'spinning heavy.gif', label: 'spinning heavy.gif', src: 'docs/spinning heavy.gif', type: 'image' },
       { key: 'Caked up Heavy Beat.mp4', label: 'Caked up Heavy Beat.mp4', src: 'docs/Caked up Heavy Beat.mp4', type: 'video' },
-      { key: 'Heavy Beat 2.mp4', label: 'Heavy Beat 2.mp4', src: 'docs/Heavy Beat 2.mp4', type: 'video' },
       { key: 'Heavy Beats.mp4', label: 'Heavy Beats.mp4', src: 'docs/Heavy Beats.mp4', type: 'video' },
-      { key: 'thats-racist.mp3', label: 'thats-racist.mp3', src: 'docs/thats-racist.mp3', type: 'audio' },
+      { key: 'Heavy Beats 2.mp4', label: 'Heavy Beats 2.mp4', src: 'docs/Heavy Beats 2.mp4', type: 'video' },
+      { key: 'Eat My Ass Heavy.mp4', label: 'Eat My Ass Heavy.mp4', src: 'docs/Eat My Ass Heavy.mp4', type: 'video' },
+      { key: 'thats racist.mp3', label: 'thats racist.mp3', src: 'docs/thats racist.mp3', type: 'audio' },
       { key: 'demo resound.mp3', label: 'demo resound.mp3', src: 'docs/demo resound.mp3', type: 'audio' },
       { key: 'demo old sound.mp3', label: 'demo old sound.mp3', src: 'docs/demo old sound.mp3', type: 'audio' },
-      { key: 'spinning_heavy_audio.mp3', label: 'spinning_heavy_audio.mp3', src: 'docs/spinning_heavy_audio.mp3', type: 'audio' }
+      { key: 'spinning heavy audio.mp3', label: 'spinning heavy audio.mp3', src: 'docs/spinning heavy audio.mp3', type: 'audio' }
     ];
     this.isActive = localStorage.getItem('rtr-dev-console-open') === '1';
     this.forceMode = localStorage.getItem('rtr-dev-force-mode') || null;
@@ -41,119 +44,81 @@ export class DeveloperControls {
   }
 
   init() {
-    // Listen for Konami code
-    window.addEventListener('keydown', (e) => this.handleKonamiCode(e));
+    // Listen for Konami code (guarded to avoid runtime errors if handler not present)
+    window.addEventListener('keydown', (e) => {
+      try {
+        if (typeof this.handleKonamiCode === 'function') this.handleKonamiCode(e);
+      } catch (err) {
+        // swallow to avoid breaking page scripts
+        console.error('DevControls: Konami handler error', err);
+      }
+    });
 
     // Create the developer panel (hidden initially)
-    this.createPanel();
-    if (this.isActive) {
-      this.panel.style.display = 'block';
-    }
-  }
-
-  handleKonamiCode(e) {
-    const key = e.code;
-    const expected = this.activationSequence[this.konamiIndex];
-
-    if (key === expected) {
-      this.konamiIndex += 1;
-      if (this.konamiIndex === this.activationSequence.length) {
-        this.konamiIndex = 0;
-        this.togglePanel();
-      }
-      return;
-    }
-
-    this.konamiIndex = 0;
-    if (key === this.activationSequence[0]) {
-      this.konamiIndex = 1;
-    }
-  }
-
-  createPanel() {
     const panel = document.createElement('div');
     panel.id = 'dev-panel';
     panel.style.cssText = `
       position: fixed;
-      bottom: 20px;
       right: 20px;
+      top: 20px;
       width: 350px;
-      max-height: 600px;
-      background: rgba(20, 30, 48, 0.95);
-      border: 2px solid #ff0000;
-      border-radius: 8px;
+      max-height: 95vh;
+      overflow-y: auto;
       padding: 16px;
+      background: #071226;
       color: #ff0000;
       font-family: monospace;
-      font-size: 12px;
-      z-index: 10000;
-      overflow-y: auto;
+      zIndex: 10000;
+      border-radius: 8px;
+      border: 2px solid #ff0000;
       box-shadow: 0 0 20px rgba(255, 0, 0, 0.3);
       display: none;
     `;
+
+    // Build pattern config HTML
+    let patternHtml = '<div style="margin-bottom:12px"><label style="display:block;margin-bottom:4px">Pattern Memory Configuration:</label><div id="pattern-config-list" style="max-height:200px;overflow-y:auto;">';
+    for (let i = 0; i < 10; i++) {
+      patternHtml += `<div style="display:flex;align-items:center;margin-bottom:4px;"><span style="width:30px;font-size:11px">${i+1}:</span><select class="dev-pattern-select" data-pos="${i}" style="flex:1;padding:2px;font-size:11px;"><option value="0">None</option><option value="1">R1</option><option value="2">O2</option><option value="3">Y3</option><option value="4">G4</option><option value="5">B5</option><option value="6">Pu6</option><option value="7">Pi7</option></select></div>`;
+    }
+    patternHtml += '</div><button id="dev-clear-pattern" style="width:100%;padding:4px;margin-top:4px;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Clear Pattern</button></div>';
+
+    // Tile previews
+    const tileButtons = [1,2,3,4,5,6,7].map(i => `<button class="dev-preview-tile" data-tile="${i}" style="flex:1 0 30%; padding:6px; background:#223344; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:11px; margin:2px">${['R1','O2','Y3','G4','B5','Pu6','Pi7'][i-1]}</button>`).join('');
+
+    // media options
+    const mediaOptions = this.docsMediaAssets.map(a => `<option value="${a.key}">${a.label}</option>`).join('');
 
     panel.innerHTML = `
       <div style="margin-bottom: 16px; border-bottom: 1px solid #ff0000; padding-bottom: 8px;">
         <h3 style="margin: 0; color: #ff0000; font-size: 14px;">🔧 DEVELOPER CONSOLE</h3>
       </div>
-
-      <div style="margin-bottom: 12px;">
-        <label style="display: block; margin-bottom: 4px;">Pattern Memory Configuration:</label>
-        <div id="pattern-config-list" style="max-height: 200px; overflow-y: auto;">
-          ${Array.from({ length: 10 }, (_, i) => `
-            <div style="display: flex; align-items: center; margin-bottom: 4px;">
-              <span style="width: 30px; font-size: 11px;">${i + 1}:</span>
-              <select class="dev-pattern-select" data-pos="${i}" style="flex: 1; padding: 2px; font-size: 11px;">
-                <option value="0">None</option>
-                <option value="1">R1</option>
-                <option value="2">O2</option>
-                <option value="3">Y3</option>
-                <option value="4">G4</option>
-                <option value="5">B5</option>
-                <option value="6">Pu6</option>
-                <option value="7">Pi7</option>
-              </select>
-            </div>
-          `).join('')}
-        </div>
-        <button id="dev-clear-pattern" style="width: 100%; padding: 4px; margin-top: 4px; background: #444; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">Clear Pattern</button>
+      ${patternHtml}
+      <div style="margin-bottom:12px">
+        <label style="display:block;margin-bottom:4px">Quick Actions:</label>
+        <label style="display:block;margin-bottom:4px;font-size:11px;"><input type="checkbox" id="dev-force-enabled" checked> Enable Force Buttons</label>
+        <label style="display:block;margin-bottom:4px;font-size:11px;"><input type="checkbox" id="dev-afk-mode"> AFK Force Mode</label>
+        <button id="dev-force-perfect" style="width:100%;padding:6px;margin-bottom:4px;background:#00ff00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Perfect</button>
+        <button id="dev-force-good" style="width:100%;padding:6px;margin-bottom:4px;background:#00cc00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Good</button>
+        <button id="dev-force-miss" style="width:100%;padding:6px;margin-bottom:4px;background:#ff4444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Miss</button>
       </div>
-
-      <div style="margin-bottom: 12px;">
-        <label style="display: block; margin-bottom: 4px;">Quick Actions:</label>
-        <label style="display: block; margin-bottom: 4px; font-size: 11px;">
-          <input type="checkbox" id="dev-force-enabled" checked> Enable Force Buttons
-        </label>
-        <label style="display: block; margin-bottom: 4px; font-size: 11px;">
-          <input type="checkbox" id="dev-afk-mode" ${this.afkMode ? 'checked' : ''}> AFK Force Mode
-        </label>
-        <button id="dev-force-perfect" style="width: 100%; padding: 6px; margin-bottom: 4px; background: #00ff00; color: #071226; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Force Perfect</button>
-        <button id="dev-force-good" style="width: 100%; padding: 6px; margin-bottom: 4px; background: #00cc00; color: #071226; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Force Good</button>
-        <button id="dev-force-miss" style="width: 100%; padding: 6px; margin-bottom: 4px; background: #ff4444; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Force Miss</button>
+      <div style="margin-bottom:12px">
+        <label style="display:block;margin-bottom:4px">Tile Previews:</label>
+        <div id="dev-tile-previews" style="display:flex;flex-wrap:wrap;gap:6px;">${tileButtons}</div>
+        <div id="dev-tile-preview-times" style="margin-top:8px;font-size:11px;color:#ccc;min-height:18px;">No preview yet.</div>
       </div>
-
-      <div style="margin-bottom: 12px;">
-        <label style="display: block; margin-bottom: 4px;">Docs media preview:</label>
-        <select id="dev-media-select" style="width: 100%; padding: 6px; margin-bottom: 8px; border-radius: 4px; border: 1px solid #ff0000; background: #071226; color: #fff; font-size: 11px;">
-          <option value="">Select docs media</option>
-          ${this.docsMediaAssets.map((asset) => `<option value="${asset.key}">${asset.label}</option>`).join('')}
-        </select>
-        <div id="dev-media-preview" style="background: rgba(0,0,0,0.12); border: 1px solid rgba(255,255,255,0.10); border-radius: 6px; min-height: 120px; display: flex; align-items: center; justify-content: center; padding: 10px; color: #ccc; font-size: 11px;">
-          <span>No media selected.</span>
-        </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;margin-bottom:4px">Docs media preview:</label>
+        <select id="dev-media-select" style="width:100%;padding:6px;margin-bottom:8px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;font-size:11px;"><option value="">Select docs media</option>${mediaOptions}</select>
+        <div id="dev-media-preview" style="background: rgba(0,0,0,0.12); border:1px solid rgba(255,255,255,0.10); border-radius:6px; min-height:120px; display:flex; align-items:center; justify-content:center; padding:10px; color:#ccc; font-size:11px;">No media selected.</div>
       </div>
-
-      <div style="margin-bottom: 12px;">
-        <label style="display: block; margin-bottom: 4px;">Game Controls:</label>
-        <button id="dev-reset-game" style="width: 100%; padding: 6px; margin-bottom: 4px; background: #ffaa00; color: #071226; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Refresh Page</button>
-        <label style="display: block; margin-bottom: 4px; font-size: 11px;">Score injection amount:</label>
-        <input id="dev-score-amount" type="number" min="0" step="100" value="1000" style="width: 100%; padding: 6px; margin-bottom: 4px; border-radius: 4px; border: 1px solid #ff0000; background: #071226; color: #fff; box-sizing: border-box;" />
-        <button id="dev-add-score" style="width: 100%; padding: 6px; background: #00ffff; color: #071226; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Inject Score</button>
+      <div style="margin-bottom:12px">
+        <label style="display:block;margin-bottom:4px">Game Controls:</label>
+        <button id="dev-reset-game" style="width:100%;padding:6px;margin-bottom:4px;background:#ffaa00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Refresh Page</button>
+        <label style="display:block;margin-bottom:4px;font-size:11px;">Score injection amount:</label>
+        <input id="dev-score-amount" type="number" min="0" step="100" value="1000" style="width:100%;padding:6px;margin-bottom:4px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;box-sizing:border-box;" />
+        <button id="dev-add-score" style="width:100%;padding:6px;background:#00ffff;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Inject Score</button>
       </div>
-
-      <div style="border-top: 1px solid #ff0000; padding-top: 8px;">
-        <p id="dev-activation-sequence" style="margin: 0; color: #aa0000; font-size: 10px;">Sequence: ${this.formatActivationSequence()} to activate</p>
-      </div>
+      <div style="border-top:1px solid #333;padding-top:8px;"><p id="dev-activation-sequence" style="margin:0;color:#aa0000;font-size:10px;">Sequence: ${this.formatActivationSequence()} to activate</p></div>
     `;
 
     document.body.appendChild(panel);
@@ -184,6 +149,32 @@ export class DeveloperControls {
       }
     });
 
+    // Tile preview buttons
+    document.addEventListener('click', (e) => {
+      if (e.target.classList && e.target.classList.contains('dev-preview-tile')) {
+        const tile = Number(e.target.dataset.tile);
+        if (!this.gameInstance || typeof this.gameInstance.previewTile !== 'function') {
+          // Fallback to local preview using AudioSchedulerPM + PatternGuide
+          if (typeof this.localPreviewTile === 'function') {
+            this.localPreviewTile(tile);
+          } else {
+            console.log('%c❌ Local preview unavailable', 'color: #ff4444;');
+          }
+          return;
+        }
+        const scheduled = this.gameInstance.previewTile(tile);
+        console.log(`%c🔊 Previewing tile ${tile}`, 'color: #22c55e;');
+        const timesEl = document.getElementById('dev-tile-preview-times');
+        if (timesEl) {
+          if (Array.isArray(scheduled) && scheduled.length) {
+            timesEl.textContent = 'Scheduled (ms): ' + scheduled.join(', ');
+          } else {
+            timesEl.textContent = 'No scheduled beats.';
+          }
+        }
+      }
+    });
+
     // Quick action buttons
     const forceEnabledCheckbox = document.getElementById('dev-force-enabled');
     const updateForceButtons = () => {
@@ -211,6 +202,26 @@ export class DeveloperControls {
         this.addScore(this.getInjectionAmount());
       }
     });
+  }
+
+  handleKonamiCode(e) {
+    // Ignore typing into form controls
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+
+    const code = e.code;
+    const expected = this.activationSequence[this.konamiIndex];
+    if (code === expected) {
+      this.konamiIndex += 1;
+      if (this.konamiIndex >= this.activationSequence.length) {
+        this.konamiIndex = 0;
+        this.togglePanel();
+      }
+    } else {
+      // If this key could be the start of the sequence, set index accordingly
+      if (code === this.activationSequence[0]) this.konamiIndex = 1;
+      else this.konamiIndex = 0;
+    }
   }
 
   updatePatternConfig(pos, value) {
@@ -348,18 +359,85 @@ export class DeveloperControls {
     if (instance && this.afkMode) {
       this.setAFKMode(true);
     }
-    if (!instance) {
-      if (this.afkTimer) {
-        clearInterval(this.afkTimer);
-        this.afkTimer = null;
-      }
-      // Disable force buttons when no game instance
-      const forceEnabledCheckbox = document.getElementById('dev-force-enabled');
-      if (forceEnabledCheckbox) {
-        forceEnabledCheckbox.checked = false;
-        forceEnabledCheckbox.dispatchEvent(new Event('change'));
-      }
+  }
+
+  async localPreviewTile(tile) {
+    const guideCanvas = document.getElementById('pattern-guide-canvas');
+    if (!guideCanvas) {
+      console.log('%c❌ No guide canvas found for local preview', 'color: #ff4444;');
+      return;
     }
+
+    const guideCtx = guideCanvas.getContext('2d');
+    const pm = new AudioSchedulerPM();
+    try {
+      await pm.init();
+    } catch (err) {
+      console.log('%c❌ Audio init failed for preview', 'color: #ff4444;');
+    }
+    const bpm = 120;
+    pm.setBPM(bpm);
+
+    const patternDelays = pm.getBeatPattern(tile);
+    const now = pm.getCurrentTime();
+    const leadTime = 0.8;
+    const preBuffer = Math.min(Math.max(leadTime * 1.0, 0.2), 1.2);
+    const guideStart = now;
+    const beatStart = guideStart + preBuffer;
+
+    // Schedule audio
+    pm.playTileBeat(tile, beatStart);
+
+    // Draw guide
+    const guide = new PatternGuide(guideCtx, guideCanvas, { xPct: 0.5, y: 12, minWidth: 320, height: 96 });
+    const scheduledTimeline = patternDelays.map(d => beatStart + d);
+    try {
+      guideCanvas.hidden = false;
+      guide.update({ timelineTimes: scheduledTimeline, userPresses: [], rollingOffset: 0, renderOffset: 0, leadTime, tolerance: { perfect: 0.25, good: 0.5 }, visible: true });
+
+      // animate the guide using requestAnimationFrame and sync ghost presses
+      let rafId = null;
+      const startNow = now;
+      const scheduledTimeouts = [];
+
+      const frame = () => {
+        try {
+          guideCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
+          guide.draw(pm.getCurrentTime());
+        } catch (err) {
+          // ignore draw errors during preview
+        }
+        rafId = window.requestAnimationFrame(frame);
+      };
+      frame();
+
+      // ghost presses removed: do not inject synthetic presses during preview
+
+      // cleanup after pattern finishes
+      const lastDelay = (patternDelays.length ? patternDelays[patternDelays.length - 1] : 0);
+      const totalMs = Math.round((preBuffer + lastDelay + 0.6) * 1000);
+      const stopId = setTimeout(() => {
+        if (rafId) window.cancelAnimationFrame(rafId);
+        scheduledTimeouts.forEach((id) => clearTimeout(id));
+        guideCanvas.hidden = true;
+        try { pm.stop(); } catch (e) {}
+      }, totalMs);
+      scheduledTimeouts.push(stopId);
+
+    } catch (err) {
+      console.log('%c❌ Guide draw failed for preview', 'color: #ff4444;');
+    }
+
+    const scheduledMs = patternDelays.map(d => Math.round((beatStart + d - now) * 1000));
+    const timesEl = document.getElementById('dev-tile-preview-times');
+    if (timesEl) timesEl.textContent = 'Scheduled (ms): ' + scheduledMs.join(', ');
+
+    // hide canvas after pattern finishes
+    const duration = (patternDelays.length ? patternDelays[patternDelays.length - 1] : 0) + 0.4;
+    setTimeout(() => {
+      guideCanvas.hidden = true;
+      try { pm.stop(); } catch (e) {}
+    }, Math.round(duration * 1000 + preBuffer * 1000));
   }
 
   setActivationSequence(sequence) {

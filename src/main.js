@@ -617,17 +617,17 @@ function showDemoGifIfUnlocked() {
 
   document.body.appendChild(tempOverlay);
 
-  // Play thats-racist.mp3
-  const racistAudio = new Audio('docs/thats-racist.mp3');
+  // Play thats racist.mp3
+  const racistAudio = new Audio('docs/thats racist.mp3');
   racistAudio.volume = 1;
   racistAudio.play().catch(() => {
-    console.log('Failed to play thats-racist.mp3');
+    console.log('Failed to play thats racist.mp3');
   });
 
   // When racist audio ends, wait 500ms then start demo.gif and demo resound together
   // Ensure they both end at the same time by looping the audio until the gif duration elapses.
   racistAudio.addEventListener('ended', () => {
-    console.log('thats-racist.mp3 ended, starting demo sequence after 500ms');
+    console.log('thats racist.mp3 ended, starting demo sequence after 500ms');
     setTimeout(() => {
       const tempImage = document.getElementById('temp-demo-image');
       if (tempImage) {
@@ -668,7 +668,7 @@ function showDemoGifIfUnlocked() {
         } catch (e) {}
         console.log('demo sequence finished, removing overlay');
         tempOverlay.remove();
-        demoGif.src = 'docs/kazotsky-kick-demoman.gif';
+        demoGif.src = 'docs/kazotsky kick demoman.gif';
         demoGif.style.display = '';
       }, Math.max(0, remaining));
     }, 500);
@@ -1103,7 +1103,7 @@ function showSpinningHeavyOverlay() {
     <div style="position: relative; width: min(94vw, 960px); display: flex; align-items: center; justify-content: center;">
       <button id="spinning-heavy-close" class="easter-close" type="button" aria-label="Close easter egg" style="position: absolute; top: 12px; right: 12px; z-index: 2; border: none; border-radius: 999px; width: 44px; height: 44px; background: rgba(255,255,255,0.16); color: #fff; font-size: 24px; cursor: pointer;">×</button>
       <div style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.16); border-radius: 24px; padding: 18px; box-shadow: 0 24px 60px rgba(0,0,0,0.45);">
-        <img id="spinning-heavy-media" src="docs/kazotsky-kick-demoman.gif" alt="Spinning heavy" style="display:block; max-width: 100%; max-height: min(78vh, 700px); width: auto; height: auto; object-fit: contain; border-radius: 16px;" />
+        <img id="spinning-heavy-media" src="docs/spinning heavy.gif" alt="Spinning heavy" style="display:block; max-width: 100%; max-height: min(78vh, 700px); width: auto; height: auto; object-fit: contain; border-radius: 16px;" />
       </div>
     </div>
   `;
@@ -1123,7 +1123,7 @@ function showSpinningHeavyOverlay() {
 
     const spinningHeavyMedia = document.getElementById('spinning-heavy-media');
     if (spinningHeavyMedia) {
-      const MediaSrc = 'docs/spinning-heavy.gif';
+      const MediaSrc = 'docs/spinning heavy.gif';
     const applyMedia = () => {
       if (spinningHeavyMedia.getAttribute('src') !== MediaSrc) {
         spinningHeavyMedia.src = MediaSrc;
@@ -1163,7 +1163,7 @@ function playSpinningHeavyAudio() {
     stopSpinningHeavyAudio();
   }
 
-  spinningHeavyAudio = new Audio('docs/spinning_heavy_audio.mp3');
+  spinningHeavyAudio = new Audio('docs/spinning heavy audio.mp3');
   spinningHeavyAudio.loop = true;
   spinningHeavyAudio.volume = 1;
   spinningHeavyAudio.play().catch(() => {
