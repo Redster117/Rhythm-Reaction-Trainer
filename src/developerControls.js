@@ -40,6 +40,11 @@ export class DeveloperControls {
     this.forceMode = localStorage.getItem('rtr-dev-force-mode') || null;
     this.afkTimer = null;
     this.afkMode = localStorage.getItem('rtr-dev-afk-mode') === '1';
+    this.patternMemorySpeed = Number(localStorage.getItem('rtr-dev-pattern-memory-speed') || '1');
+    this.autoClickerEnabled = localStorage.getItem('rtr-dev-auto-clicker-enabled') === '1';
+    this.autoClickerTarget = String(localStorage.getItem('rtr-dev-auto-clicker-target') || 'good').toLowerCase();
+    this.autoClickerTarget = ['good', 'perfect'].includes(this.autoClickerTarget) ? this.autoClickerTarget : 'good';
+    this.autoClickerTimer = null;
 
     this.init();
   }
@@ -88,6 +93,15 @@ export class DeveloperControls {
 
     // media options
     const mediaOptions = this.docsMediaAssets.map(a => `<option value="${a.key}">${a.label}</option>`).join('');
+    const patternSpeedOptions = ['0.5', '0.75', '1', '1.25', '1.5', '2']
+      .map((value) => {
+        const numericValue = Number(value);
+        const isSelected = Number(this.patternMemorySpeed) === numericValue ? ' selected' : '';
+        return `<option value="${value}"${isSelected}>${value}x</option>`;
+      })
+      .join('');
+    const autoClickerChecked = this.autoClickerEnabled ? ' checked' : '';
+    const autoClickerTargetValue = this.autoClickerTarget === 'perfect' ? 'perfect' : 'good';
 
     panel.innerHTML = `
       <div style="margin-bottom: 16px; border-bottom: 1px solid #ff0000; padding-bottom: 8px;">
@@ -95,12 +109,20 @@ export class DeveloperControls {
       </div>
       ${patternHtml}
       <div style="margin-bottom:12px">
+        <label style="display:block;margin-bottom:4px">Pattern Memory Speed:</label>
+        <select id="dev-pattern-speed" style="width:100%;padding:6px;margin-bottom:8px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;font-size:11px;">
+          ${patternSpeedOptions}
+        </select>
+      </div>
+      <div style="margin-bottom:12px">
         <label style="display:block;margin-bottom:4px">Quick Actions:</label>
-        <label style="display:block;margin-bottom:4px;font-size:11px;"><input type="checkbox" id="dev-force-enabled" checked> Enable Force Buttons</label>
+        <label style="display:block;margin-bottom:4px;font-size:11px;"><input type="checkbox" id="dev-force-enabled" checked> Enable force actions</label>
         <label style="display:block;margin-bottom:4px;font-size:11px;"><input type="checkbox" id="dev-afk-mode"> AFK Force Mode</label>
-        <button id="dev-force-perfect" style="width:100%;padding:6px;margin-bottom:4px;background:#00ff00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Perfect</button>
-        <button id="dev-force-good" style="width:100%;padding:6px;margin-bottom:4px;background:#00cc00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Good</button>
-        <button id="dev-force-miss" style="width:100%;padding:6px;margin-bottom:4px;background:#ff4444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Miss</button>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" class="dev-action-toggle" id="dev-enable-force-perfect" checked><button id="dev-force-perfect" style="flex:1;padding:6px;background:#00ff00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Perfect</button></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" class="dev-action-toggle" id="dev-enable-force-good" checked><button id="dev-force-good" style="flex:1;padding:6px;background:#00cc00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Good</button></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" class="dev-action-toggle" id="dev-enable-force-miss" checked><button id="dev-force-miss" style="flex:1;padding:6px;background:#ff4444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Miss</button></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" class="dev-action-toggle" id="dev-enable-auto-clicker"${autoClickerChecked}><label style="font-size:11px;min-width:84px;">Auto Clicker</label><select id="dev-auto-clicker-target" style="flex:1;padding:6px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;font-size:11px;"><option value="good"${autoClickerTargetValue === 'good' ? ' selected' : ''}>Good</option><option value="perfect"${autoClickerTargetValue === 'perfect' ? ' selected' : ''}>Perfect</option></select></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" class="dev-action-toggle" id="dev-enable-add-score" checked><button id="dev-add-score" style="flex:1;padding:6px;background:#00ffff;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Inject Score</button></div>
       </div>
       <div style="margin-bottom:12px">
         <label style="display:block;margin-bottom:4px">Tile Previews:</label>
@@ -117,7 +139,6 @@ export class DeveloperControls {
         <button id="dev-reset-game" style="width:100%;padding:6px;margin-bottom:4px;background:#ffaa00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Refresh Page</button>
         <label style="display:block;margin-bottom:4px;font-size:11px;">Score injection amount:</label>
         <input id="dev-score-amount" type="number" min="0" step="100" value="1000" style="width:100%;padding:6px;margin-bottom:4px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;box-sizing:border-box;" />
-        <button id="dev-add-score" style="width:100%;padding:6px;background:#00ffff;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Inject Score</button>
       </div>
       <div style="border-top:1px solid #333;padding-top:8px;"><p id="dev-activation-sequence" style="margin:0;color:#aa0000;font-size:10px;">Sequence: ${this.formatActivationSequence()} to activate</p></div>
     `;
@@ -137,6 +158,9 @@ export class DeveloperControls {
         const pos = parseInt(e.target.dataset.pos);
         const value = parseInt(e.target.value);
         this.updatePatternConfig(pos, value);
+      }
+      if (e.target.id === 'dev-pattern-speed') {
+        this.setPatternMemorySpeed(e.target.value);
       }
       if (e.target.id === 'dev-media-select') {
         this.renderMediaPreview(e.target.value);
@@ -179,15 +203,58 @@ export class DeveloperControls {
     // Quick action buttons
     const forceEnabledCheckbox = document.getElementById('dev-force-enabled');
     const updateForceButtons = () => {
-      const enabled = forceEnabledCheckbox.checked;
-      document.getElementById('dev-force-perfect').disabled = !enabled;
-      document.getElementById('dev-force-good').disabled = !enabled;
-      document.getElementById('dev-force-miss').disabled = !enabled;
-      document.querySelectorAll('.dev-tile-btn').forEach(btn => btn.disabled = !enabled);
+      const masterEnabled = forceEnabledCheckbox?.checked !== false;
+      const actionButtons = [
+        { buttonId: 'dev-force-perfect', toggleId: 'dev-enable-force-perfect' },
+        { buttonId: 'dev-force-good', toggleId: 'dev-enable-force-good' },
+        { buttonId: 'dev-force-miss', toggleId: 'dev-enable-force-miss' },
+        { buttonId: 'dev-add-score', toggleId: 'dev-enable-add-score' }
+      ];
+      actionButtons.forEach(({ buttonId, toggleId }) => {
+        const button = document.getElementById(buttonId);
+        const toggle = document.getElementById(toggleId);
+        if (button) {
+          button.disabled = !masterEnabled || !toggle?.checked;
+        }
+      });
+      const autoToggle = document.getElementById('dev-enable-auto-clicker');
+      const autoTarget = document.getElementById('dev-auto-clicker-target');
+      if (autoTarget) {
+        autoTarget.disabled = !masterEnabled || !autoToggle?.checked;
+      }
+      document.querySelectorAll('.dev-tile-btn').forEach((btn) => btn.disabled = !masterEnabled);
     };
-    forceEnabledCheckbox.addEventListener('change', updateForceButtons);
+    forceEnabledCheckbox?.addEventListener('change', updateForceButtons);
+    document.querySelectorAll('.dev-action-toggle').forEach((toggle) => {
+      toggle.addEventListener('change', updateForceButtons);
+    });
+    this.updateActionButtonStates = updateForceButtons;
     updateForceButtons(); // Initial state
 
+    const wireForceToggle = (toggleId, judgement) => {
+      document.getElementById(toggleId)?.addEventListener('change', (e) => {
+        const masterEnabled = document.getElementById('dev-force-enabled')?.checked !== false;
+        if (!masterEnabled) {
+          e.target.checked = false;
+          return;
+        }
+        if (e.target.checked) {
+          this.forceMode = judgement;
+          localStorage.setItem('rtr-dev-force-mode', judgement);
+          this.updateForceButtonStyles();
+          this.forceJudgement(judgement);
+          return;
+        }
+        if (this.forceMode === judgement) {
+          this.forceMode = null;
+          localStorage.removeItem('rtr-dev-force-mode');
+          this.updateForceButtonStyles();
+        }
+      });
+    };
+    wireForceToggle('dev-enable-force-perfect', 'Perfect');
+    wireForceToggle('dev-enable-force-good', 'Good');
+    wireForceToggle('dev-enable-force-miss', 'Miss');
     document.getElementById('dev-force-perfect')?.addEventListener('click', () => this.forceJudgement('Perfect'));
     document.getElementById('dev-force-good')?.addEventListener('click', () => this.forceJudgement('Good'));
     document.getElementById('dev-force-miss')?.addEventListener('click', () => this.forceJudgement('Miss'));
@@ -196,6 +263,8 @@ export class DeveloperControls {
       window.location.reload();
     });
     document.getElementById('dev-afk-mode')?.addEventListener('change', (e) => this.setAFKMode(Boolean(e.target.checked)));
+    document.getElementById('dev-enable-auto-clicker')?.addEventListener('change', (e) => this.setAutoClickerEnabled(Boolean(e.target.checked)));
+    document.getElementById('dev-auto-clicker-target')?.addEventListener('change', (e) => this.setAutoClickerTarget(e.target.value));
     document.getElementById('dev-add-score')?.addEventListener('click', () => this.addScore(this.getInjectionAmount()));
     document.getElementById('dev-score-amount')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -284,22 +353,25 @@ export class DeveloperControls {
   }
 
   forceJudgement(judgement) {
-    const enabled = document.getElementById('dev-force-enabled')?.checked;
+    const normalizedJudgement = ['Perfect', 'Good', 'Miss'].includes(judgement) ? judgement : 'Good';
+    const toggleId = `dev-enable-force-${normalizedJudgement.toLowerCase()}`;
+    const toggle = document.getElementById(toggleId);
+    const enabled = document.getElementById('dev-force-enabled')?.checked !== false && Boolean(toggle?.checked);
     if (!enabled) return;
     if (!this.gameInstance) {
       console.log('%c❌ No game instance', 'color: #ff4444; font-size: 12px;');
       return;
     }
 
-    this.forceMode = judgement;
-    localStorage.setItem('rtr-dev-force-mode', judgement);
+    this.forceMode = normalizedJudgement;
+    localStorage.setItem('rtr-dev-force-mode', normalizedJudgement);
     this.updateForceButtonStyles();
 
     if (typeof this.gameInstance.devInjectJudgementFunc === 'function') {
-      this.gameInstance.devInjectJudgementFunc(judgement, { persistent: true });
+      this.gameInstance.devInjectJudgementFunc(normalizedJudgement, { persistent: true });
     }
 
-    console.log(`%c💫 Forced ${judgement}`, 'color: #ffff00; font-size: 12px;');
+    console.log(`%c💫 Forced ${normalizedJudgement}`, 'color: #ffff00; font-size: 12px;');
   }
 
   updateForceButtonStyles() {
@@ -311,6 +383,29 @@ export class DeveloperControls {
       button.style.outline = active ? '2px solid #fff' : 'none';
       button.style.boxShadow = active ? '0 0 0 2px rgba(255,255,255,0.25)' : 'none';
     });
+  }
+
+  updateActionButtonStates() {
+    const forceEnabledCheckbox = document.getElementById('dev-force-enabled');
+    const masterEnabled = forceEnabledCheckbox?.checked !== false;
+    const actionButtons = [
+      { buttonId: 'dev-force-perfect', toggleId: 'dev-enable-force-perfect' },
+      { buttonId: 'dev-force-good', toggleId: 'dev-enable-force-good' },
+      { buttonId: 'dev-force-miss', toggleId: 'dev-enable-force-miss' },
+      { buttonId: 'dev-add-score', toggleId: 'dev-enable-add-score' }
+    ];
+    actionButtons.forEach(({ buttonId, toggleId }) => {
+      const button = document.getElementById(buttonId);
+      const toggle = document.getElementById(toggleId);
+      if (button) {
+        button.disabled = !masterEnabled || !toggle?.checked;
+      }
+    });
+    const autoToggle = document.getElementById('dev-enable-auto-clicker');
+    const autoTarget = document.getElementById('dev-auto-clicker-target');
+    if (autoTarget) {
+      autoTarget.disabled = !masterEnabled || !autoToggle?.checked;
+    }
   }
 
   setAFKMode(enabled) {
@@ -341,6 +436,8 @@ export class DeveloperControls {
   }
 
   addScore(amount) {
+    const enabled = document.getElementById('dev-enable-add-score')?.checked;
+    if (!enabled) return;
     const safeAmount = Number.isFinite(Number(amount)) ? Math.max(0, Number(amount)) : 1000;
     if (this.gameInstance && typeof this.gameInstance.devAddScoreFunc === 'function') {
       this.gameInstance.devAddScoreFunc(safeAmount);
@@ -350,15 +447,123 @@ export class DeveloperControls {
     }
   }
 
+  syncPatternMemorySpeedControl() {
+    const select = document.getElementById('dev-pattern-speed');
+    if (!select) return;
+    const value = String(this.patternMemorySpeed);
+    const matchingOption = Array.from(select.options).find((option) => option.value === value);
+    if (matchingOption) {
+      select.value = value;
+    } else {
+      select.value = '1';
+    }
+  }
+
+  setPatternMemorySpeed(speedMultiplier = 1) {
+    const safeSpeed = Number.isFinite(Number(speedMultiplier)) ? Math.max(0.1, Number(speedMultiplier)) : 1;
+    this.patternMemorySpeed = safeSpeed;
+    this.syncPatternMemorySpeedControl();
+    try {
+      localStorage.setItem('rtr-dev-pattern-memory-speed', String(safeSpeed));
+    } catch (err) {
+      console.warn('DeveloperControls: could not persist pattern memory speed', err);
+    }
+
+    if (this.gameInstance && typeof this.gameInstance.setPlaybackSpeed === 'function') {
+      this.gameInstance.setPlaybackSpeed(safeSpeed);
+    }
+  }
+
+  isAutoClickerEnabled() {
+    return Boolean(this.autoClickerEnabled);
+  }
+
+  getAutoClickerTarget() {
+    return this.autoClickerTarget;
+  }
+
+  setAutoClickerEnabled(enabled = false, target = null) {
+    this.autoClickerEnabled = Boolean(enabled);
+    if (target) {
+      this.autoClickerTarget = ['good', 'perfect'].includes(String(target).toLowerCase()) ? String(target).toLowerCase() : this.autoClickerTarget;
+    }
+    try {
+      localStorage.setItem('rtr-dev-auto-clicker-enabled', this.autoClickerEnabled ? '1' : '0');
+      localStorage.setItem('rtr-dev-auto-clicker-target', this.autoClickerTarget);
+    } catch (err) {
+      console.warn('DeveloperControls: could not persist auto-clicker settings', err);
+    }
+    const toggle = document.getElementById('dev-enable-auto-clicker');
+    if (toggle) toggle.checked = this.autoClickerEnabled;
+    const targetSelect = document.getElementById('dev-auto-clicker-target');
+    if (targetSelect && ['good', 'perfect'].includes(this.autoClickerTarget)) {
+      targetSelect.value = this.autoClickerTarget;
+    }
+    this.updateActionButtonStates?.();
+    if (this.autoClickerEnabled) {
+      this.startAutoClickerLoop();
+    } else {
+      this.stopAutoClickerLoop();
+    }
+  }
+
+  setAutoClickerTarget(target = 'good') {
+    const normalizedTarget = ['good', 'perfect'].includes(String(target).toLowerCase()) ? String(target).toLowerCase() : 'good';
+    this.autoClickerTarget = normalizedTarget;
+    try {
+      localStorage.setItem('rtr-dev-auto-clicker-target', this.autoClickerTarget);
+    } catch (err) {
+      console.warn('DeveloperControls: could not persist auto-clicker target', err);
+    }
+    const targetSelect = document.getElementById('dev-auto-clicker-target');
+    if (targetSelect) targetSelect.value = this.autoClickerTarget;
+    if (this.gameInstance && this.autoClickerEnabled) {
+      this.startAutoClickerLoop();
+    }
+  }
+
+  startAutoClickerLoop() {
+    if (!this.autoClickerEnabled || this.autoClickerTimer) return;
+    this.autoClickerTimer = window.setInterval(() => {
+      if (!this.autoClickerEnabled) {
+        this.stopAutoClickerLoop();
+        return;
+      }
+      if (!this.gameInstance) return;
+      const judgement = this.autoClickerTarget === 'perfect' ? 'Perfect' : 'Good';
+      if (typeof this.gameInstance.devAutoClickFunc === 'function') {
+        this.gameInstance.devAutoClickFunc(judgement);
+      } else if (typeof this.gameInstance.devInjectJudgementFunc === 'function') {
+        this.gameInstance.devInjectJudgementFunc(judgement, { persistent: true });
+      }
+    }, 320);
+  }
+
+  stopAutoClickerLoop() {
+    if (this.autoClickerTimer) {
+      window.clearInterval(this.autoClickerTimer);
+    }
+    this.autoClickerTimer = null;
+  }
+
   setGameInstance(instance) {
     this.gameInstance = instance;
     this.updateForceButtonStyles();
+    this.updateActionButtonStates?.();
 
     if (instance && this.forceMode) {
       this.gameInstance.devInjectJudgementFunc?.(this.forceMode, { persistent: true });
     }
     if (instance && this.afkMode) {
       this.setAFKMode(true);
+    }
+    if (instance && typeof instance.setPlaybackSpeed === 'function') {
+      instance.setPlaybackSpeed(this.patternMemorySpeed);
+    }
+    if (this.autoClickerEnabled) {
+      this.startAutoClickerLoop();
+    } else {
+      this.stopAutoClickerLoop();
     }
   }
 

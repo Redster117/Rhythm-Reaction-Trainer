@@ -391,6 +391,16 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     forcedPersistent = Boolean(options.persistent);
   }
 
+  function devAutoClickFunc(judgement) {
+    if (gameEnded) return;
+    const normalizedJudgement = ['Perfect', 'Good'].includes(judgement) ? judgement : 'Good';
+    forcedJudgement = normalizedJudgement;
+    forcedPersistent = true;
+    const pendingCue = cues.find((cue) => !cue.hit) || cues[0];
+    if (!pendingCue) return;
+    window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, code: pendingCue.code }));
+  }
+
   function devAddScoreFunc(amount) {
     score += amount;
     updateHUD();
@@ -417,6 +427,7 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     stop,
     getState,
     devInjectJudgementFunc,
+    devAutoClickFunc,
     devAddScoreFunc,
     reset,
     setDebug: (v) => { debug = !!v; }

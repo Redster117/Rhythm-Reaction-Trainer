@@ -69,7 +69,7 @@ export default class PatternGuide {
     const ctx = this.ctx;
     const w = this.canvas.width;
     const guideH = Math.max(36, this.opts.height);
-    let guideW = Math.max(this.opts.minWidth, Math.min(Math.floor(w * 0.45), Math.floor(w * 0.6)));
+    let guideW = Math.max(this.opts.minWidth, Math.floor(w * 0.45));
     const beatCount = this.timelineTimes.length;
     if (beatCount >= 7) {
       guideW = Math.max(guideW, Math.floor(w * 0.72));
@@ -129,6 +129,14 @@ export default class PatternGuide {
 
     // markers: draw a thin line per beat, highlight when dot is near or beat just occurred
     const highlightDur = Math.min(0.18, Math.max(0.08, this.tolerance.perfect * 0.5));
+    const makeHitboxBox = (startTime, endTime) => {
+      const startPx = guideX + 8 + ((startTime - firstDisplay) / range) * (guideW - 16);
+      const endPx = guideX + 8 + ((endTime - firstDisplay) / range) * (guideW - 16);
+      const boxX = Math.max(guideX + 8, Math.min(startPx, endPx));
+      const boxRight = Math.min(guideX + guideW - 8, Math.max(startPx, endPx));
+      const boxW = Math.max(4, boxRight - boxX);
+      return { x: boxX, w: boxW };
+    };
     this.timelineTimes.forEach((t, i) => {
       const dt = displayTimes[i];
       const rel = (dt - firstDisplay) / range;
@@ -136,25 +144,16 @@ export default class PatternGuide {
       const beatTolerance = this.beatTimings[i] || this.tolerance;
       const missStart = dt - beatTolerance.good;
       const missEnd = dt + beatTolerance.good;
-      const missStartPx = guideX + 8 + ((missStart - firstDisplay) / range) * (guideW - 16);
-      const missEndPx = guideX + 8 + ((missEnd - firstDisplay) / range) * (guideW - 16);
-      const missBoxX = Math.max(guideX + 8, Math.min(missStartPx, missEndPx));
-      const missBoxW = Math.max(8, Math.min(guideX + guideW - 8, Math.max(missStartPx, missEndPx)) - missBoxX);
+      const missBox = makeHitboxBox(missStart, missEnd);
       const goodStart = dt - beatTolerance.perfect;
       const goodEnd = dt + beatTolerance.perfect;
-      const goodStartPx = guideX + 8 + ((goodStart - firstDisplay) / range) * (guideW - 16);
-      const goodEndPx = guideX + 8 + ((goodEnd - firstDisplay) / range) * (guideW - 16);
-      const goodBoxX = Math.max(guideX + 8, Math.min(goodStartPx, goodEndPx));
-      const goodBoxW = Math.max(8, Math.min(guideX + guideW - 8, Math.max(goodStartPx, goodEndPx)) - goodBoxX);
+      const goodBox = makeHitboxBox(goodStart, goodEnd);
       const perfectStart = dt - beatTolerance.perfect * 0.5;
       const perfectEnd = dt + beatTolerance.perfect * 0.5;
-      const perfectStartPx = guideX + 8 + ((perfectStart - firstDisplay) / range) * (guideW - 16);
-      const perfectEndPx = guideX + 8 + ((perfectEnd - firstDisplay) / range) * (guideW - 16);
-      const perfectBoxX = Math.max(guideX + 8, Math.min(perfectStartPx, perfectEndPx));
-      const perfectBoxW = Math.max(4, Math.min(guideX + guideW - 8, Math.max(perfectStartPx, perfectEndPx)) - perfectBoxX);
+      const perfectBox = makeHitboxBox(perfectStart, perfectEnd);
 
       const timeDiff = displayedNow - dt; // positive when displayed time passed the beat
-      const isActive = Math.abs(timeDiff) <= highlightDur || (timeDiff > 0 && timeDiff <= highlightDur);
+      const isActive = Math.abs(timeDiff) <= highlightDur;
 
       if (this.opts.debug) {
         const boxY = guideY + 8;
@@ -166,7 +165,7 @@ export default class PatternGuide {
           ctx.strokeStyle = 'rgba(248, 113, 113, 0.85)';
           ctx.lineWidth = 1;
           ctx.beginPath();
-          this._roundRect(ctx, missBoxX, boxY, missBoxW, boxH, 4);
+          this._roundRect(ctx, missBox.x, boxY, missBox.w, boxH, 4);
           ctx.fill();
           ctx.stroke();
           ctx.restore();
@@ -178,7 +177,7 @@ export default class PatternGuide {
           ctx.strokeStyle = 'rgba(249, 115, 22, 0.9)';
           ctx.lineWidth = 1;
           ctx.beginPath();
-          this._roundRect(ctx, goodBoxX, boxY + 4, goodBoxW, boxH - 8, 4);
+          this._roundRect(ctx, goodBox.x, boxY + 4, goodBox.w, boxH - 8, 4);
           ctx.fill();
           ctx.stroke();
           ctx.restore();
@@ -190,7 +189,7 @@ export default class PatternGuide {
           ctx.strokeStyle = 'rgba(74, 222, 128, 0.95)';
           ctx.lineWidth = 1;
           ctx.beginPath();
-          this._roundRect(ctx, perfectBoxX, boxY + 8, perfectBoxW, boxH - 16, 4);
+          this._roundRect(ctx, perfectBox.x, boxY + 8, perfectBox.w, boxH - 16, 4);
           ctx.fill();
           ctx.stroke();
           ctx.restore();
@@ -263,11 +262,11 @@ export default class PatternGuide {
 
     // ghost presses: draw only when userPresses contains actual user click times
     this.userPresses.forEach((pressTime) => {
-        // Use pressTime + rollingOffset + renderOffset so ghost dots are mapped
-        // to the same display time base as the moving dot. Ghosts are still only
-        // created on actual user clicks; this aligns their visual position.
-        const displayPress = pressTime + this.rollingOffset + this.renderOffset;
-      if (displayPress < firstDisplay - 0 || displayPress > lastDisplay + 0) return;
+      // Use pressTime + rollingOffset + renderOffset so ghost dots are mapped
+      // to the same display time base as the moving dot. Ghosts are still only
+      // created on actual user clicks; this aligns their visual position.
+      const displayPress = pressTime + this.rollingOffset + this.renderOffset;
+      if (displayPress < firstDisplay || displayPress > lastDisplay) return;
       const relp = (displayPress - firstDisplay) / range;
       const pxp = guideX + 8 + relp * (guideW - 16);
 

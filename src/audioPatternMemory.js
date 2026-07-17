@@ -78,12 +78,14 @@ export class AudioSchedulerPM {
     return Math.max(0, this.audioContext.currentTime - this.startTime);
   }
 
-  playTileBeat(tileNumber, startAt = null) {
+  playTileBeat(tileNumber, startAt = null, speedMultiplier = 1) {
     // tileNumber: 1-7 (R1-Pi7)
     if (!this.audioContext || !this.beatPatterns[tileNumber]) return;
 
     const pattern = this.beatPatterns[tileNumber];
     const now = this.audioContext.currentTime;
+    const safeMultiplier = Number(speedMultiplier) || 1;
+    const effectiveSpeed = Math.max(0.1, safeMultiplier);
 
     // If startAt is provided, it's an absolute scheduler time (seconds returned by getCurrentTime())
     // Convert it to audioContext time: noteStartTime = now + (startAt - this.getCurrentTime()) + note.delayFromStart
@@ -91,8 +93,9 @@ export class AudioSchedulerPM {
 
     // Play each note in the pattern
     for (const note of pattern) {
-      const noteStartTime = now + baseOffset + note.delayFromStart;
-      this.playNote(note.frequency, note.duration, noteStartTime);
+      const noteStartTime = now + baseOffset + (note.delayFromStart / effectiveSpeed);
+      const noteDuration = note.duration / effectiveSpeed;
+      this.playNote(note.frequency, noteDuration, noteStartTime);
     }
   }
 
