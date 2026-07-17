@@ -1003,6 +1003,7 @@ patternGuideToggle?.addEventListener('change', () => {
   showMessage(patternGuideEnabled ? 'Pattern guide enabled.' : 'Pattern guide disabled.');
 });
 
+
 stopBtn.addEventListener('click', () => stopGame());
 
 deleteAccountBtn.addEventListener('click', () => {
@@ -1284,13 +1285,15 @@ function loadAudioSettings() {
   backgroundMusicEnabled = typeof settings.backgroundMusicEnabled === 'boolean' ? settings.backgroundMusicEnabled : false;
   customBackgroundMusicUrl = settings.customBackgroundMusicUrl || '';
   backgroundMusicLoop = typeof settings.backgroundMusicLoop === 'boolean' ? settings.backgroundMusicLoop : true;
+  patternGuideEnabled = typeof settings.patternGuideEnabled === 'boolean' ? settings.patternGuideEnabled : true;
 }
 
 function saveAudioSettings() {
   setStoredAudioSettings({
     backgroundMusicEnabled,
     customBackgroundMusicUrl,
-    backgroundMusicLoop
+    backgroundMusicLoop,
+    patternGuideEnabled
   });
 }
 

@@ -1,6 +1,7 @@
 // src/developerControls.js
 import { AudioSchedulerPM } from './audioPatternMemory.js';
 import PatternGuide from './patternGuide.js';
+import { getPatternMemoryTimingTolerance } from './timingConfig.js';
 // Secret developer console with Konami code activation
 
 export class DeveloperControls {
@@ -393,7 +394,7 @@ export class DeveloperControls {
     const scheduledTimeline = patternDelays.map(d => beatStart + d);
     try {
       guideCanvas.hidden = false;
-      guide.update({ timelineTimes: scheduledTimeline, userPresses: [], rollingOffset: 0, renderOffset: 0, leadTime, tolerance: { perfect: 0.25, good: 0.5 }, visible: true });
+      guide.update({ timelineTimes: scheduledTimeline, userPresses: [], rollingOffset: 0, renderOffset: 0, leadTime, tolerance: getPatternMemoryTimingTolerance('noob'), visible: true });
 
       // animate the guide using requestAnimationFrame and sync ghost presses
       let rafId = null;

@@ -16,9 +16,17 @@ export default class PatternGuide {
       y: 80,
       minWidth: 140,
       height: 48,
-      preBufferPctOfLead: 1.0, // preBuffer = leadTime * this
-      debug: false
+      preBufferPctOfLead: 0, // preBuffer = leadTime * this
+      debug: true,
+      hitboxLayers: {
+        miss: true,
+        good: true,
+        perfect: true
+      }
     }, opts);
+    if (opts.hitboxLayers) {
+      this.opts.hitboxLayers = Object.assign({ miss: true, good: true, perfect: true }, opts.hitboxLayers);
+    }
 
     // Data populated by caller
     this.timelineTimes = []; // absolute times (seconds)
@@ -26,7 +34,8 @@ export default class PatternGuide {
     this.rollingOffset = 0; // seconds
     this.renderOffset = 0; // seconds, used for phase-specific dot start positioning
     this.leadTime = 0.8;
-    this.tolerance = { perfect: 0.25, good: 0.5 };
+    this.tolerance = { perfect: 0.25, good: 1.5 };
+    this.beatTimings = [];
     this.visible = true;
   }
 
@@ -36,7 +45,7 @@ export default class PatternGuide {
   }
 
   // Provide timeline times and optional state
-  update({ timelineTimes = [], userPresses = [], rollingOffset = 0, renderOffset = 0, leadTime = 0.8, tolerance = null, visible = true } = {}) {
+  update({ timelineTimes = [], userPresses = [], rollingOffset = 0, renderOffset = 0, leadTime = 0.8, tolerance = null, visible = true, hitboxLayers = null, beatTimings = null } = {}) {
     this.timelineTimes = timelineTimes.slice();
     this.userPresses = userPresses.slice();
     this.rollingOffset = rollingOffset;
@@ -44,6 +53,14 @@ export default class PatternGuide {
     this.leadTime = leadTime;
     this.visible = visible;
     if (tolerance) this.tolerance = tolerance;
+    if (Array.isArray(beatTimings)) {
+      this.beatTimings = beatTimings.slice();
+    } else {
+      this.beatTimings = [];
+    }
+    if (hitboxLayers) {
+      this.opts.hitboxLayers = Object.assign({ miss: true, good: true, perfect: true }, hitboxLayers);
+    }
   }
 
   // Draw the guide using the previously provided data; 'now' should be scheduler currentTime
@@ -51,8 +68,16 @@ export default class PatternGuide {
     if (!this.visible || !this.timelineTimes || this.timelineTimes.length === 0) return;
     const ctx = this.ctx;
     const w = this.canvas.width;
-    const guideH = Math.max(32, this.opts.height);
+    const guideH = Math.max(36, this.opts.height);
     let guideW = Math.max(this.opts.minWidth, Math.min(Math.floor(w * 0.45), Math.floor(w * 0.6)));
+    const beatCount = this.timelineTimes.length;
+    if (beatCount >= 7) {
+      guideW = Math.max(guideW, Math.floor(w * 0.72));
+    } else if (beatCount >= 6) {
+      guideW = Math.max(guideW, Math.floor(w * 0.66));
+    } else if (beatCount >= 4) {
+      guideW = Math.max(guideW, Math.floor(w * 0.56));
+    }
     // Position the guide so it stays inside the canvas bounds
     let guideX = Math.floor(w * this.opts.xPct - guideW / 2);
     const margin = 12;
@@ -90,15 +115,87 @@ export default class PatternGuide {
     ctx.lineTo(guideX + guideW - 8, guideY + guideH / 2);
     ctx.stroke();
 
+    if (this.opts.debug) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.font = '10px system-ui';
+      ctx.fillText('DEBUG', guideX + 8, guideY + 12);
+      ctx.fillStyle = '#7dd3fc';
+      ctx.fillText(`Perfect ±${this.tolerance.perfect.toFixed(2)}s`, guideX + 8, guideY + 24);
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillText(`Good ±${this.tolerance.good.toFixed(2)}s`, guideX + 8, guideY + 36);
+      ctx.restore();
+    }
+
     // markers: draw a thin line per beat, highlight when dot is near or beat just occurred
     const highlightDur = Math.min(0.18, Math.max(0.08, this.tolerance.perfect * 0.5));
     this.timelineTimes.forEach((t, i) => {
       const dt = displayTimes[i];
       const rel = (dt - firstDisplay) / range;
       const px = guideX + 8 + rel * (guideW - 16);
+      const beatTolerance = this.beatTimings[i] || this.tolerance;
+      const missStart = dt - beatTolerance.good;
+      const missEnd = dt + beatTolerance.good;
+      const missStartPx = guideX + 8 + ((missStart - firstDisplay) / range) * (guideW - 16);
+      const missEndPx = guideX + 8 + ((missEnd - firstDisplay) / range) * (guideW - 16);
+      const missBoxX = Math.max(guideX + 8, Math.min(missStartPx, missEndPx));
+      const missBoxW = Math.max(8, Math.min(guideX + guideW - 8, Math.max(missStartPx, missEndPx)) - missBoxX);
+      const goodStart = dt - beatTolerance.perfect;
+      const goodEnd = dt + beatTolerance.perfect;
+      const goodStartPx = guideX + 8 + ((goodStart - firstDisplay) / range) * (guideW - 16);
+      const goodEndPx = guideX + 8 + ((goodEnd - firstDisplay) / range) * (guideW - 16);
+      const goodBoxX = Math.max(guideX + 8, Math.min(goodStartPx, goodEndPx));
+      const goodBoxW = Math.max(8, Math.min(guideX + guideW - 8, Math.max(goodStartPx, goodEndPx)) - goodBoxX);
+      const perfectStart = dt - beatTolerance.perfect * 0.5;
+      const perfectEnd = dt + beatTolerance.perfect * 0.5;
+      const perfectStartPx = guideX + 8 + ((perfectStart - firstDisplay) / range) * (guideW - 16);
+      const perfectEndPx = guideX + 8 + ((perfectEnd - firstDisplay) / range) * (guideW - 16);
+      const perfectBoxX = Math.max(guideX + 8, Math.min(perfectStartPx, perfectEndPx));
+      const perfectBoxW = Math.max(4, Math.min(guideX + guideW - 8, Math.max(perfectStartPx, perfectEndPx)) - perfectBoxX);
 
       const timeDiff = displayedNow - dt; // positive when displayed time passed the beat
       const isActive = Math.abs(timeDiff) <= highlightDur || (timeDiff > 0 && timeDiff <= highlightDur);
+
+      if (this.opts.debug) {
+        const boxY = guideY + 8;
+        const boxH = guideH - 16;
+
+        if (this.opts.hitboxLayers?.miss !== false) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.18)';
+          ctx.strokeStyle = 'rgba(248, 113, 113, 0.85)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          this._roundRect(ctx, missBoxX, boxY, missBoxW, boxH, 4);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (this.opts.hitboxLayers?.good !== false) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(249, 115, 22, 0.2)';
+          ctx.strokeStyle = 'rgba(249, 115, 22, 0.9)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          this._roundRect(ctx, goodBoxX, boxY + 4, goodBoxW, boxH - 8, 4);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (this.opts.hitboxLayers?.perfect !== false) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.16)';
+          ctx.strokeStyle = 'rgba(74, 222, 128, 0.95)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          this._roundRect(ctx, perfectBoxX, boxY + 8, perfectBoxW, boxH - 16, 4);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
 
       if (isActive) {
         // highlighted marker (glow + thicker) - use neutral blue highlight (no green)
@@ -127,6 +224,17 @@ export default class PatternGuide {
         ctx.lineTo(px, guideY + guideH - 6);
         ctx.stroke();
       }
+
+      if (this.opts.debug) {
+        const debugLabel = `${i + 1}`;
+        const labelX = px;
+        const labelY = guideY + guideH / 2 + 18;
+        ctx.save();
+        ctx.fillStyle = '#e2e8f0';
+        ctx.font = '9px system-ui';
+        ctx.fillText(debugLabel, labelX, labelY);
+        ctx.restore();
+      }
     });
 
     // moving dot
@@ -142,13 +250,24 @@ export default class PatternGuide {
     ctx.fill();
     ctx.restore();
 
+    if (this.opts.debug) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(dotX, guideY + 6);
+      ctx.lineTo(dotX, guideY + guideH - 6);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // ghost presses: draw only when userPresses contains actual user click times
     this.userPresses.forEach((pressTime) => {
         // Use pressTime + rollingOffset + renderOffset so ghost dots are mapped
         // to the same display time base as the moving dot. Ghosts are still only
         // created on actual user clicks; this aligns their visual position.
         const displayPress = pressTime + this.rollingOffset + this.renderOffset;
-      if (displayPress < firstDisplay - 0.5 || displayPress > lastDisplay + 0.5) return;
+      if (displayPress < firstDisplay - 0 || displayPress > lastDisplay + 0) return;
       const relp = (displayPress - firstDisplay) / range;
       const pxp = guideX + 8 + relp * (guideW - 16);
 
@@ -157,8 +276,9 @@ export default class PatternGuide {
         nearestDiff = Math.min(nearestDiff, Math.abs(displayPress - dt));
       }
       let color = '#ff6b6b';
-      if (nearestDiff <= this.tolerance.perfect) color = '#ffffff';
-      else if (nearestDiff <= this.tolerance.good) color = '#facc15';
+      const ghostTolerance = this.beatTimings[0] || this.tolerance;
+      if (nearestDiff <= ghostTolerance.perfect) color = '#ffffff';
+      else if (nearestDiff <= ghostTolerance.good) color = '#facc15';
 
       ctx.fillStyle = color;
       ctx.beginPath();
@@ -168,7 +288,7 @@ export default class PatternGuide {
 
     // small label
     ctx.fillStyle = '#e6eef6';
-    const fontSize = Math.max(10, Math.floor(guideH * 0.36));
+    const fontSize = Math.max(4, Math.floor(guideH * 0.16));
     ctx.font = `${fontSize}px system-ui`;
     ctx.fillText('Guide: beat markers and moving dot', guideX + 8, guideY - 8);
   }

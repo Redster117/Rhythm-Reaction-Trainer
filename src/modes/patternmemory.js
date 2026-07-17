@@ -1,8 +1,10 @@
 // src/modes/patternmemory.js
 import { AudioSchedulerPM } from '../audioPatternMemory.js';
 import PatternGuide from '../patternGuide.js';
+import { getPatternMemoryBeatTiming, getPatternMemoryTimingTolerance } from '../timingConfig.js';
+import { createRoundEvaluationGuard, resolveJudgementTransition } from '../roundLifecycle.js';
 
-export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD, difficulty = {}, onGameEnd, debug = false, customPattern = null, showGuide = true } = {}) {
+export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD, difficulty = {}, onGameEnd, debug = false, customPattern = null, showGuide = true, hitboxLayers = null, timingOverrides = null } = {}) {
   const ctx = canvas.getContext('2d');
 
   const COLOURS = [
@@ -52,6 +54,9 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   let devInjectPersistent = false;
   let devAddScore = 0;
   let inputTimeout = null;
+  let roundSettlementTimer = null;
+  const patternTimingOverrides = Array.isArray(timingOverrides) ? timingOverrides.slice() : null;
+  const roundEvaluationGuard = createRoundEvaluationGuard();
   // Latency calibration / rolling offset (seconds). Positive means display lags real time.
   let rollingOffset = 0; // seconds
   const offsetSamples = [];
@@ -155,7 +160,8 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       // Update and draw the centralized guide renderer in the separate guide canvas
       // Do not apply rollingOffset during preview (it anticipates user input and can desync audio preview)
       const applyRolling = state === 'preview' ? 0 : rollingOffset;
-      guide.update({ timelineTimes, userPresses, rollingOffset: applyRolling, renderOffset, leadTime, tolerance: getTimingTolerance(), visible: true });
+      const beatTimings = timelineTimes.map((_, beatIndex) => getTimingTolerance(beatIndex));
+      guide.update({ timelineTimes, userPresses, rollingOffset: applyRolling, renderOffset, leadTime, tolerance: getTimingTolerance(), visible: true, hitboxLayers: hitboxLayers || undefined, beatTimings });
       guide.draw(now);
     }
 
@@ -219,6 +225,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     hasPlayerInput = false;
 
     // Guide phase: show the guide first, then play the beat at scheduled beatStart
+    roundEvaluationGuard.reset();
     const patternDelays = pmAudioScheduler.getBeatPattern(currentTile);
     const now = safeNow();
     const preBuffer = Math.min(Math.max(leadTime * guide.opts.preBufferPctOfLead, 0.2), 1.2);
@@ -281,6 +288,8 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   }
 
   function evaluateRound() {
+    if (!roundEvaluationGuard.markSettled()) return;
+
     if (inputTimeout) {
       clearTimeout(inputTimeout);
       inputTimeout = null;
@@ -299,7 +308,6 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
         devInjectJudgement = null;
       }
     } else if (clickCount === requiredClicks && userPresses.length === requiredClicks) {
-      const tolerance = getTimingTolerance();
       let allPerfect = true;
       let allGood = true;
 
@@ -311,6 +319,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
         try {
           console.log('%c[PM] Press compare', 'color: #8ae234;', { index: i, rawPress: userPresses[i], adjustedPress, expected: expectedClickTimes[i], diff });
         } catch (err) {}
+        const tolerance = getTimingTolerance(i);
         // collect raw offset for calibration (expected - actual)
         measuredOffsets.push(expectedClickTimes[i] - userPresses[i]);
         if (Math.abs(diff) <= tolerance.perfect) {
@@ -354,11 +363,6 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       }
     }
 
-    if (judgement === 'Miss') {
-      triggerGameOver();
-      return;
-    }
-
     applyJudgement(judgement);
   }
 
@@ -388,8 +392,36 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
 
     onUpdateHUDSafe();
 
+    const transition = resolveJudgementTransition(judgementLabel);
+
+    if (transition.shouldEndRun) {
+      state = 'gameover';
+      lastJudgement = judgementLabel;
+      onUpdateHUDSafe();
+      if (inputTimeout) {
+        clearTimeout(inputTimeout);
+        inputTimeout = null;
+      }
+      if (roundSettlementTimer) {
+        clearTimeout(roundSettlementTimer);
+        roundSettlementTimer = null;
+      }
+      canvas.animate([{ opacity: 1 }, { opacity: 0.2 }, { opacity: 1 }], { duration: 420 });
+      setTimeout(() => {
+        stop();
+        if (typeof onGameEnd === 'function') onGameEnd();
+      }, 600);
+      return;
+    }
+
     currentRound++;
-    setTimeout(() => startRound(), 500);
+    if (roundSettlementTimer) {
+      clearTimeout(roundSettlementTimer);
+    }
+    roundSettlementTimer = setTimeout(() => {
+      roundSettlementTimer = null;
+      startRound();
+    }, 500);
   }
 
   function onUpdateHUDSafe() {
@@ -416,7 +448,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     if (px < canvas.width / 2) {
       const clickTime = safeNow();
       if (!validateClickTiming(clickTime)) {
-        triggerGameOver();
+        applyJudgement('Miss');
         return;
       }
       userPresses.push(clickTime);
@@ -429,7 +461,15 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   }
 
   function triggerGameOver() {
-    if (state !== 'input') return;
+    if (state === 'gameover') return;
+    if (currentRound < totalRounds) {
+      state = 'idle';
+      if (inputTimeout) {
+        clearTimeout(inputTimeout);
+        inputTimeout = null;
+      }
+      return;
+    }
     state = 'gameover';
     lastJudgement = 'Game Over';
     onUpdateHUDSafe();
@@ -498,6 +538,10 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       clearTimeout(inputTimeout);
       inputTimeout = null;
     }
+    if (roundSettlementTimer) {
+      clearTimeout(roundSettlementTimer);
+      roundSettlementTimer = null;
+    }
     state = 'idle';
     pmAudioScheduler.stop();
   }
@@ -533,7 +577,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       // Enforce per-beat gating: clicks should correspond to the next expected
       // beat within a reasonable tolerance window. This prevents spam clicks
       // from filling later slots and producing false "Perfect" judgements.
-      const tol = getTimingTolerance();
+      const tol = getTimingTolerance(clickCount);
       const nextIdx = clickCount;
       const nextExpected = expectedClickTimes[nextIdx];
       if (typeof nextExpected === 'number') {
@@ -552,17 +596,12 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     return true;
   }
 
-  function getTimingTolerance() {
-    const difficultyLevel = difficulty.level || 'noob';
-    const thresholds = {
-      noob: { perfect: 0.42, good: 0.55 },
-      ez: { perfect: 0.37, good: 0.5 },
-      veteran: { perfect: 0.29, good: 0.45 },
-      experienced: { perfect: 0.25, good: 0.4 },
-      expert: { perfect: 0.21, good: 0.35 },
-      pro: { perfect: 0.19, good: 0.3 }
-    };
-    return thresholds[difficultyLevel] || thresholds.noob;
+  function getTimingTolerance(beatIndex = null) {
+    if (typeof beatIndex === 'number') {
+      const overrideKey = currentTile ?? null;
+      return getPatternMemoryBeatTiming(difficulty.level || 'noob', beatIndex, patternTimingOverrides, overrideKey);
+    }
+    return getPatternMemoryTimingTolerance(difficulty.level || 'noob');
   }
 
   // Developer control methods
@@ -662,17 +701,26 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     // so dev previews can show visuals without starting the full mode.
     try {
       if (typeof rafId === 'undefined' || !rafId) {
-        if (guide && typeof guide.update === 'function' && typeof guide.draw === 'function') {
-          const now = safeNow();
-          const applyRolling = 0; // no rolling during preview
-          guide.update({ timelineTimes: scheduledTimelineTimes, userPresses: [], rollingOffset: applyRolling, renderOffset: 0, leadTime, tolerance: getTimingTolerance(), visible: true });
-          if (guideCanvas) {
-            guideCanvas.hidden = false;
-            // ensure canvas size matches expected drawing buffer
-            try { guideCanvas.width = guideCanvas.clientWidth || guideCanvas.width; guideCanvas.height = guideCanvas.clientHeight || guideCanvas.height; } catch (e) {}
-          }
-          guide.draw(now);
+        const now = safeNow();
+        const applyRolling = 0; // no rolling during preview
+        const beatTimings = scheduledTimelineTimes.map((_, beatIndex) => getTimingTolerance(beatIndex));
+        guide.update({
+          timelineTimes: scheduledTimelineTimes,
+          userPresses: [],
+          rollingOffset: applyRolling,
+          renderOffset: 0,
+          leadTime,
+          tolerance: getTimingTolerance(),
+          visible: true,
+          hitboxLayers: hitboxLayers || undefined,
+          beatTimings
+        });
+        if (guideCanvas) {
+          guideCanvas.hidden = false;
+          // ensure canvas size matches expected drawing buffer
+          try { guideCanvas.width = guideCanvas.clientWidth || guideCanvas.width; guideCanvas.height = guideCanvas.clientHeight || guideCanvas.height; } catch (e) {}
         }
+        guide.draw(now);
       }
     } catch (err) {
       // ignore preview drawing errors
