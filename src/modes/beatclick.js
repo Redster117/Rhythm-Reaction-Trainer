@@ -266,6 +266,16 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
     forcedPersistent = Boolean(options.persistent);
   }
 
+  function devAutoClickFunc(judgement) {
+    if (gameEnded) return;
+    const normalizedJudgement = ['Perfect', 'Good'].includes(judgement) ? judgement : 'Good';
+    forcedJudgement = normalizedJudgement;
+    forcedPersistent = true;
+    if (mouseHandler) {
+      mouseHandler(new MouseEvent('mousedown', { bubbles: true, clientX: canvas.width / 2, clientY: canvas.height / 2 }));
+    }
+  }
+
   function devAddScoreFunc(amount) {
     score += amount;
     onUpdateHUD({
@@ -295,5 +305,5 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
     start();
   }
 
-  return { start, stop, getState, devInjectJudgementFunc, devAddScoreFunc, reset };
+  return { start, stop, getState, devInjectJudgementFunc, devAutoClickFunc, devAddScoreFunc, reset };
 }

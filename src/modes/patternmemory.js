@@ -4,6 +4,12 @@ import PatternGuide from '../patternGuide.js';
 import { getPatternMemoryBeatTiming, getPatternMemoryTimingTolerance } from '../timingConfig.js';
 import { createRoundEvaluationGuard, resolveJudgementTransition } from '../roundLifecycle.js';
 
+export function getPatternMemoryComboDelta(level = '', judgementLabel = '') {
+  if (level === 'noob' && judgementLabel === 'Perfect') return 2;
+  if (level === 'noob' && judgementLabel === 'Good') return 1;
+  return 1;
+}
+
 export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD, difficulty = {}, onGameEnd, debug = false, customPattern = null, showGuide = true, hitboxLayers = null, timingOverrides = null } = {}) {
   const ctx = canvas.getContext('2d');
 
@@ -23,9 +29,10 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   let goodCount = 0;
   let totalOffset = 0;
 
-  let leadTime = 0.8;
+  let leadTime = 0;
   const showDuration = 1.0;
   const inputWindow = 3.0;
+  let playbackSpeed = 1;
 
   let maxTile = 7;
   if (difficulty.level === 'noob' || difficulty.level === 'ez') maxTile = 3;
@@ -48,7 +55,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   let expectedClickTimes = [];
   let userPresses = [];
   let clickCount = 0;
-  let requiredClicks = 1;
+  let requiredClicks = 100;
   let hasPlayerInput = false;
   let devInjectJudgement = null;
   let devInjectPersistent = false;
@@ -174,7 +181,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     ctx.fillText(`Last: ${lastJudgement}`, 12, 60);
     ctx.fillText(`State: ${state}`, 12, 80);
     if (state === 'input') {
-      ctx.fillText(`Presses: ${clickCount}/${requiredClicks}`, 12, 100);
+      ctx.fillText(`Presses: ${clickCount}`, 12, 100);
       ctx.fillText('Reproduce the beat now', 12, 120);
     }
 
@@ -226,7 +233,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
 
     // Guide phase: show the guide first, then play the beat at scheduled beatStart
     roundEvaluationGuard.reset();
-    const patternDelays = pmAudioScheduler.getBeatPattern(currentTile);
+    const patternDelays = (pmAudioScheduler.getBeatPattern(currentTile) || []).map((delay) => delay / playbackSpeed);
     const now = safeNow();
     const preBuffer = Math.min(Math.max(leadTime * guide.opts.preBufferPctOfLead, 0.2), 1.2);
     const guideStart = now;
@@ -238,7 +245,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     scheduledTimelineTimes = patternDelays.map(d => beatStart + d);
 
     // Schedule audio to play at scheduler time 'beatStart'
-    pmAudioScheduler.playTileBeat(currentTile, beatStart);
+    pmAudioScheduler.playTileBeat(currentTile, beatStart, playbackSpeed);
 
     state = 'preview';
     scheduledPreviewStart = guideStart;
@@ -246,6 +253,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     // After the preview pattern has finished playing, transition to input phase
     const patternDuration = (patternDelays.length ? patternDelays[patternDelays.length - 1] : 0) + 0.25;
     const inputStart = beatStart + patternDuration;
+    const inputWindowForSpeed = Math.max(0.2, inputWindow / playbackSpeed);
     setTimeout(() => {
       state = 'input';
       inputStartedAt = safeNow();
@@ -262,7 +270,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       hasPlayerInput = false;
       inputTimeout = setTimeout(() => {
         evaluateRound();
-      }, inputWindow * 1000);
+      }, inputWindowForSpeed * 1000);
 
       // ghost presses removed: do not inject synthetic presses during input
     }, Math.max(0, (inputStart - safeNow()) * 1000));
@@ -272,7 +280,10 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     if (state !== 'input' || e.ctrlKey || e.altKey || e.metaKey || hasPlayerInput) return;
     const clickTime = safeNow();
     // Only reject strictly invalid clicks (duplicates or overflow); otherwise accept
-    if (!validateClickTiming(clickTime)) return;
+    if (!validateClickTiming(clickTime)) {
+      applyJudgement('Miss');
+      return;
+    }
     // Diagnostic logging
     try {
       console.log('%c[PM] KeyDown click', 'color: #66d9ef;', {
@@ -281,10 +292,6 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     } catch (err) {}
     userPresses.push(clickTime);
     clickCount += 1;
-    if (clickCount >= requiredClicks) {
-      hasPlayerInput = true;
-      evaluateRound();
-    }
   }
 
   function evaluateRound() {
@@ -307,13 +314,14 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       if (!devInjectPersistent) {
         devInjectJudgement = null;
       }
-    } else if (clickCount === requiredClicks && userPresses.length === requiredClicks) {
+    } else if (userPresses.length > 0) {
       let allPerfect = true;
       let allGood = true;
+      const comparisonCount = Math.min(requiredClicks, userPresses.length);
 
       // Compare adjusted press times (apply rollingOffset) to expectedClickTimes
       const measuredOffsets = [];
-      for (let i = 0; i < requiredClicks; i++) {
+      for (let i = 0; i < comparisonCount; i++) {
         const adjustedPress = userPresses[i] + rollingOffset;
         const diff = adjustedPress - expectedClickTimes[i];
         try {
@@ -374,11 +382,11 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     if (judgement.label === 'Perfect') {
       perfectCount++;
       score += 300;
-      combo += 1;
+      combo += getPatternMemoryComboDelta(difficulty.level, judgement.label);
     } else if (judgement.label === 'Good') {
       goodCount++;
       score += 100;
-      combo += 1;
+      combo += getPatternMemoryComboDelta(difficulty.level, judgement.label);
     } else {
       combo = 0;
     }
@@ -453,10 +461,6 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       }
       userPresses.push(clickTime);
       clickCount += 1;
-      if (clickCount >= requiredClicks) {
-        hasPlayerInput = true;
-        evaluateRound();
-      }
     }
   }
 
@@ -563,13 +567,11 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   }
 
   function validateClickTiming(clickTime) {
-    if (clickCount >= requiredClicks) {
-      return false;
-    }
+    // Revert the old required-click gating so input can continue until timeout.
     // Do not immediately fail the player for being slightly early/late.
     // Only enforce ordering (no repeated/earlier presses) and bounds.
     if (clickCount > 0 && clickTime <= userPresses[clickCount - 1]) {
-      return false;
+      return true;
     }
 
     // Optional: reject clicks that are wildly outside the expected window
@@ -604,6 +606,14 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     return getPatternMemoryTimingTolerance(difficulty.level || 'noob');
   }
 
+  function setPlaybackSpeed(speedMultiplier = 1) {
+    playbackSpeed = Number.isFinite(Number(speedMultiplier)) ? Math.max(0.1, Number(speedMultiplier)) : 1;
+  }
+
+  function getPlaybackSpeed() {
+    return playbackSpeed;
+  }
+
   // Developer control methods
   function devForceTile(tile) {
     if (state === 'idle' || state === 'countdown') return;
@@ -619,6 +629,15 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     if (state === 'input' && !hasPlayerInput) {
       evaluateRound();
     }
+  }
+
+  function devAutoClickFunc(judgement) {
+    if (state !== 'input' || hasPlayerInput) return;
+    const normalizedJudgement = ['Perfect', 'Good'].includes(judgement) ? judgement : 'Good';
+    devInjectJudgement = normalizedJudgement;
+    devInjectPersistent = true;
+    const clickEvent = new MouseEvent('pointerdown', { bubbles: true, clientX: 10, clientY: 10, pointerType: 'mouse' });
+    canvas.dispatchEvent(clickEvent);
   }
 
   function devAddScoreFunc(amount) {
@@ -676,14 +695,14 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     if (!tile || typeof tile !== 'number') return;
     // Do not disturb an active round
     if (state === 'input' || state === 'preview' || state === 'countdown') return;
-    const patternDelays = pmAudioScheduler.getBeatPattern(tile);
+    const patternDelays = (pmAudioScheduler.getBeatPattern(tile) || []).map((delay) => delay / playbackSpeed);
     const now = safeNow();
     const preBuffer = Math.min(Math.max(leadTime * guide.opts.preBufferPctOfLead, 0.2), 1.2);
     const guideStart = now;
     const beatStart = guideStart + preBuffer;
 
     // schedule audio and guide times
-    pmAudioScheduler.playTileBeat(tile, beatStart);
+    pmAudioScheduler.playTileBeat(tile, beatStart, playbackSpeed);
     const oldState = state;
     const oldTile = currentTile;
     const oldScheduled = scheduledTimelineTimes.slice();
@@ -744,5 +763,5 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     return scheduledMs;
   }
 
-  return { start, stop, getState, devForceTile, devInjectJudgementFunc, devAddScoreFunc, reset, setGuideOptions, setRollingOffset, getGuideOptions, getRollingOffset, getScheduledGuideTimings };
+  return { start, stop, getState, devForceTile, devInjectJudgementFunc, devAutoClickFunc, devAddScoreFunc, reset, setGuideOptions, setRollingOffset, getGuideOptions, getRollingOffset, getScheduledGuideTimings, setPlaybackSpeed, getPlaybackSpeed };
 }
