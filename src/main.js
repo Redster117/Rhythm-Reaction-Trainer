@@ -1104,7 +1104,7 @@ function showSpinningHeavyOverlay() {
     <div style="position: relative; width: min(94vw, 960px); display: flex; align-items: center; justify-content: center;">
       <button id="spinning-heavy-close" class="easter-close" type="button" aria-label="Close easter egg" style="position: absolute; top: 12px; right: 12px; z-index: 2; border: none; border-radius: 999px; width: 44px; height: 44px; background: rgba(255,255,255,0.16); color: #fff; font-size: 24px; cursor: pointer;">×</button>
       <div style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255,255,255,0.16); border-radius: 24px; padding: 18px; box-shadow: 0 24px 60px rgba(0,0,0,0.45);">
-        <img id="spinning-heavy-media" src="docs/spinning heavy.gif" alt="Spinning heavy" style="display:block; max-width: 100%; max-height: min(78vh, 700px); width: auto; height: auto; object-fit: contain; border-radius: 16px;" />
+        <img id="spinning-heavy-media" src="docs/spinning heavy.gif" alt="Spinning heavy" style="max-width: 100%; max-height: 100%; object-fit: contain;height: 400px;">
       </div>
     </div>
   `;
