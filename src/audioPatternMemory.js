@@ -132,6 +132,12 @@ export class AudioSchedulerPM {
     return this.beatPatterns[tileNumber]?.map(note => note.delayFromStart) || [];
   }
 
+  getBeatPatternMs(tileNumber, speedMultiplier = 1) {
+    const safeMultiplier = Number(speedMultiplier) || 1;
+    const effectiveSpeed = Math.max(0.1, safeMultiplier);
+    return (this.beatPatterns[tileNumber] || []).map((note) => Math.round((note.delayFromStart / effectiveSpeed) * 1000));
+  }
+
   // Set a custom beat pattern for a tile
   setTilePattern(tileNumber, pattern) {
     if (tileNumber >= 1 && tileNumber <= 7 && Array.isArray(pattern)) {

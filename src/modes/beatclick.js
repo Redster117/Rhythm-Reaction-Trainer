@@ -141,88 +141,24 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  function handleInput() {
-    mouseHandler = (e) => {
-      const now = scheduler.getCurrentTime();
-      // find nearest unhit cue, accept any timing if developer forced judgement
-      let nearest = null;
-      let bestDiff = Infinity;
-      const maximumWindow = forcedJudgement ? Infinity : timingWindows.good;
-      for (const c of cues) {
-        if (c.hit) continue;
-        const diff = Math.abs(now - c.beatTime);
-        if (diff < bestDiff && diff <= maximumWindow) {
-          bestDiff = diff;
-          nearest = c;
-        }
+  function processInput(now = scheduler.getCurrentTime()) {
+    if (gameEnded) return;
+    let nearest = null;
+    let bestDiff = Infinity;
+    const maximumWindow = forcedJudgement ? Infinity : timingWindows.good;
+    for (const c of cues) {
+      if (c.hit) continue;
+      const diff = Math.abs(now - c.beatTime);
+      if (diff < bestDiff && diff <= maximumWindow) {
+        bestDiff = diff;
+        nearest = c;
       }
-      if (!nearest) {
-        lastJudgement = 'Miss';
-        combo = 0;
-        totalJudgements += 1;
-        missCount += 1;
-        onUpdateHUD({
-          score,
-          combo,
-          lastJudgement,
-          accuracy: Math.round(((perfectCount + goodCount) / totalJudgements) * 100),
-          precision: totalJudgements ? Math.round((totalOffset / totalJudgements) * 1000) : 0
-        });
-        endRunAfterMiss();
-        return;
-      }
-      nearest.hit = true;
+    }
+    if (!nearest) {
+      lastJudgement = 'Miss';
+      combo = 0;
       totalJudgements += 1;
-      const diff = bestDiff;
-      totalOffset += diff;
-
-      if (forcedJudgement) {
-        lastJudgement = forcedJudgement;
-        if (forcedJudgement === 'Perfect') {
-          score += 300;
-          combo += 1;
-          perfectCount += 1;
-        } else if (forcedJudgement === 'Good') {
-          score += 100;
-          combo += 1;
-          goodCount += 1;
-        } else {
-          combo = 0;
-          missCount += 1;
-        }
-        if (!forcedPersistent) {
-          forcedJudgement = null;
-        }
-        if (lastJudgement === 'Miss') {
-          endRunAfterMiss();
-          return;
-        }
-      } else if (diff <= timingWindows.perfect) {
-        score += 300;
-        combo += 1;
-        lastJudgement = 'Perfect';
-        perfectCount += 1;
-      } else if (diff <= timingWindows.good) {
-        score += 100;
-        combo += 1;
-        lastJudgement = 'Good';
-        goodCount += 1;
-      } else {
-        combo = 0;
-        lastJudgement = 'Miss';
-        missCount += 1;
-      }
-
-      if (lastJudgement === 'Miss') {
-        endRunAfterMiss();
-        return;
-      }
-
-      if (pendingScoreAdd) {
-        score += pendingScoreAdd;
-        pendingScoreAdd = 0;
-      }
-
+      missCount += 1;
       onUpdateHUD({
         score,
         combo,
@@ -230,6 +166,73 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
         accuracy: Math.round(((perfectCount + goodCount) / totalJudgements) * 100),
         precision: totalJudgements ? Math.round((totalOffset / totalJudgements) * 1000) : 0
       });
+      endRunAfterMiss();
+      return;
+    }
+    nearest.hit = true;
+    totalJudgements += 1;
+    const diff = bestDiff;
+    totalOffset += diff;
+
+    if (forcedJudgement) {
+      lastJudgement = forcedJudgement;
+      if (forcedJudgement === 'Perfect') {
+        score += 300;
+        combo += 1;
+        perfectCount += 1;
+      } else if (forcedJudgement === 'Good') {
+        score += 100;
+        combo += 1;
+        goodCount += 1;
+      } else {
+        combo = 0;
+        missCount += 1;
+      }
+      if (!forcedPersistent) {
+        forcedJudgement = null;
+      }
+      if (lastJudgement === 'Miss') {
+        endRunAfterMiss();
+        return;
+      }
+    } else if (diff <= timingWindows.perfect) {
+      score += 300;
+      combo += 1;
+      lastJudgement = 'Perfect';
+      perfectCount += 1;
+    } else if (diff <= timingWindows.good) {
+      score += 100;
+      combo += 1;
+      lastJudgement = 'Good';
+      goodCount += 1;
+    } else {
+      combo = 0;
+      lastJudgement = 'Miss';
+      missCount += 1;
+    }
+
+    if (lastJudgement === 'Miss') {
+      endRunAfterMiss();
+      return;
+    }
+
+    if (pendingScoreAdd) {
+      score += pendingScoreAdd;
+      pendingScoreAdd = 0;
+    }
+
+    onUpdateHUD({
+      score,
+      combo,
+      lastJudgement,
+      accuracy: Math.round(((perfectCount + goodCount) / totalJudgements) * 100),
+      precision: totalJudgements ? Math.round((totalOffset / totalJudgements) * 1000) : 0
+    });
+  }
+
+  function handleInput() {
+    mouseHandler = (e) => {
+      processInput(scheduler.getCurrentTime());
     };
     canvas.addEventListener('mousedown', mouseHandler);
   }
@@ -244,6 +247,11 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
     }
     render();
     handleInput();
+  }
+
+  function handleSpaceInput() {
+    if (!mouseHandler || gameEnded) return;
+    mouseHandler(new MouseEvent('mousedown', { bubbles: true, clientX: canvas.width / 2, clientY: canvas.height / 2 }));
   }
 
   function getState() {
@@ -273,6 +281,8 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
     forcedPersistent = true;
     if (mouseHandler) {
       mouseHandler(new MouseEvent('mousedown', { bubbles: true, clientX: canvas.width / 2, clientY: canvas.height / 2 }));
+    } else {
+      processInput(scheduler.getCurrentTime());
     }
   }
 
@@ -305,5 +315,5 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
     start();
   }
 
-  return { start, stop, getState, devInjectJudgementFunc, devAutoClickFunc, devAddScoreFunc, reset };
+  return { start, stop, getState, devInjectJudgementFunc, devAutoClickFunc, devAddScoreFunc, reset, handleSpaceInput };
 }

@@ -1,9 +1,8 @@
 // src/modes/patternmemory.js
 import { AudioSchedulerPM } from '../audioPatternMemory.js';
 import PatternGuide from '../patternGuide.js';
-import { getPatternMemoryBeatTiming, getPatternMemoryTimingTolerance } from '../timingConfig.js';
-import { createRoundEvaluationGuard, resolveJudgementTransition } from '../roundLifecycle.js';
-import { advanceBeatQueueForTime, createBeatQueue, judgeBeatInput, scoreRhythmPattern } from '../utils.js';
+import { getPatternMemoryTimingTolerance } from '../timingConfig.js';
+import { buildReactionBeatTargets, judgeTimedReactionBeat } from '../utils.js';
 
 export function getPatternMemoryComboDelta(level = '', judgementLabel = '') {
   if (level === 'noob' && judgementLabel === 'Perfect') return 2;
@@ -30,7 +29,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   let goodCount = 0;
   let totalOffset = 0;
 
-  let leadTime = 0;
+  let leadTime = 0.8;
   const showDuration = 1.0;
   const inputWindow = 3.0;
   let playbackSpeed = 1;
@@ -55,13 +54,10 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   let inputStartedAt = 0;
   let expectedClickTimes = [];
   let userPresses = [];
+  let pressJudgements = [];
+  let reactionTargetTimes = [];
   let clickCount = 0;
-  let activeBeatQueue = [];
-  let activeBeatQueueIndex = 0;
-  let beatQueueResults = [];
-  let requiredClicks = 100;
-  let lastInputWasEarly = false;
-  let lastInputWasLate = false;
+  let requiredClicks = 1;
   let hasPlayerInput = false;
   let devInjectJudgement = null;
   let devInjectPersistent = false;
@@ -69,15 +65,12 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   let inputTimeout = null;
   let roundSettlementTimer = null;
   const patternTimingOverrides = Array.isArray(timingOverrides) ? timingOverrides.slice() : null;
-  const roundEvaluationGuard = createRoundEvaluationGuard();
   // Latency calibration / rolling offset (seconds). Positive means display lags real time.
   let rollingOffset = 0; // seconds
-  const offsetSamples = [];
   let scheduledTimelineTimes = [];
   let scheduledTimelineTimesInput = [];
   let scheduledBeatStart = null;
   let scheduledPreviewStart = null;
-  let scheduledInputGhostTimeouts = [];
 
   const countdown = document.getElementById('countdown');
 
@@ -94,17 +87,6 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     const now = safeNow();
     const w = canvas.width;
     const h = canvas.height;
-
-    if (state === 'input' && activeBeatQueue.length) {
-      const queueProgress = advanceBeatQueueForTime(activeBeatQueue, activeBeatQueueIndex, now);
-      if (queueProgress.missedBeat) {
-        beatQueueResults.push({ status: 'judged', judgement: 'Miss' });
-        activeBeatQueueIndex = queueProgress.currentIndex;
-        if (activeBeatQueueIndex >= activeBeatQueue.length) {
-          hasPlayerInput = true;
-        }
-      }
-    }
 
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = '#0b0c0e';
@@ -185,7 +167,8 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       // Do not apply rollingOffset during preview (it anticipates user input and can desync audio preview)
       const applyRolling = state === 'preview' ? 0 : rollingOffset;
       const beatTimings = timelineTimes.map((_, beatIndex) => getTimingTolerance(beatIndex));
-      guide.update({ timelineTimes, userPresses, rollingOffset: applyRolling, renderOffset, leadTime, tolerance: getTimingTolerance(), visible: true, hitboxLayers: hitboxLayers || undefined, beatTimings });
+      const guideTargetTimes = reactionTargetTimes.length ? reactionTargetTimes : timelineTimes;
+      guide.update({ timelineTimes, targetTimes: guideTargetTimes, userPresses, rollingOffset: applyRolling, renderOffset, leadTime, tolerance: getTimingTolerance(), visible: true, hitboxLayers: hitboxLayers || undefined, beatTimings });
       guide.draw(now);
     }
 
@@ -198,7 +181,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     ctx.fillText(`Last: ${lastJudgement}`, 12, 60);
     ctx.fillText(`State: ${state}`, 12, 80);
     if (state === 'input') {
-      ctx.fillText(`Presses: ${clickCount}`, 12, 100);
+      ctx.fillText(`Presses: ${clickCount}/${requiredClicks}`, 12, 100);
       ctx.fillText('Reproduce the beat now', 12, 120);
     }
 
@@ -248,8 +231,6 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     }
     hasPlayerInput = false;
 
-    // Guide phase: show the guide first, then play the beat at scheduled beatStart
-    roundEvaluationGuard.reset();
     const patternDelays = (pmAudioScheduler.getBeatPattern(currentTile) || []).map((delay) => delay / playbackSpeed);
     const now = safeNow();
     const preBuffer = Math.min(Math.max(leadTime * guide.opts.preBufferPctOfLead, 0.2), 1.2);
@@ -257,92 +238,82 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     const beatStart = guideStart + preBuffer;
     scheduledBeatStart = beatStart;
     scheduledPreviewStart = guideStart;
-    // align tile flash to the guide timing so the visual matches the beats
     currentTileFlashTime = beatStart - leadTime;
     scheduledTimelineTimes = patternDelays.map(d => beatStart + d);
 
-    // Schedule audio to play at scheduler time 'beatStart'
     pmAudioScheduler.playTileBeat(currentTile, beatStart, playbackSpeed);
 
     state = 'preview';
-    scheduledPreviewStart = guideStart;
 
-    // After the preview pattern has finished playing, transition to input phase
-    const patternDuration = (patternDelays.length ? patternDelays[patternDelays.length - 1] : 0) + 0.25;
-    const inputStart = beatStart + patternDuration;
-    const inputWindowForSpeed = Math.max(0.2, inputWindow / playbackSpeed);
     setTimeout(() => {
       state = 'input';
       inputStartedAt = safeNow();
-      // clear any input ghost timeouts that might remain
-      if (scheduledInputGhostTimeouts && scheduledInputGhostTimeouts.length) {
-        scheduledInputGhostTimeouts.forEach(id => clearTimeout(id));
-        scheduledInputGhostTimeouts = [];
-      }
       expectedClickTimes = patternDelays.map((delay) => inputStartedAt + delay);
       scheduledTimelineTimesInput = expectedClickTimes.slice();
       userPresses = [];
+      pressJudgements = [];
+      reactionTargetTimes = buildReactionBeatTargets(expectedClickTimes, []);
       clickCount = 0;
-      activeBeatQueue = createBeatQueue(expectedClickTimes);
-      activeBeatQueueIndex = 0;
-      beatQueueResults = [];
       requiredClicks = expectedClickTimes.length || 1;
       hasPlayerInput = false;
       inputTimeout = setTimeout(() => {
         evaluateRound();
-      }, inputWindowForSpeed * 1000);
-
-      // ghost presses removed: do not inject synthetic presses during input
-    }, Math.max(0, (inputStart - safeNow()) * 1000));
+      }, inputWindow * 1000);
+    }, (leadTime + showDuration) * 1000);
   }
 
-  function registerInput(clickTime) {
-    if (state !== 'input' || hasPlayerInput) return false;
-    if (!validateClickTiming(clickTime)) {
+  function judgePressTiming(clickTime, pressIndex) {
+    const tolerance = getTimingTolerance();
+    const perfectWindowMs = Number(guide.opts.perfectWindowMs) || tolerance.perfectWindowMs;
+    const goodWindowMs = Number(guide.opts.goodWindowMs) || tolerance.goodWindowMs;
+
+    const officialBeatTimeSeconds = expectedClickTimes[pressIndex];
+    const previousPressTimeSeconds = userPresses[pressIndex - 1] ?? null;
+    const previousOfficialBeatTimeSeconds = pressIndex > 0 ? expectedClickTimes[pressIndex - 1] : null;
+
+    const judgement = judgeTimedReactionBeat({
+      beatIndex: pressIndex,
+      pressTimeSeconds: clickTime,
+      officialBeatTimeSeconds,
+      previousPressTimeSeconds,
+      previousOfficialBeatTimeSeconds,
+      perfectWindowMs,
+      goodWindowMs,
+      forcePerfect: currentTile === 1 && pressIndex === 0
+    });
+
+    return judgement;
+  }
+
+  function registerPress(clickTime) {
+    if (state !== 'input' || hasPlayerInput || !validateClickTiming(clickTime)) {
       return false;
     }
 
-    const currentBeat = activeBeatQueue[activeBeatQueueIndex];
-    if (!currentBeat) {
-      userPresses.push(clickTime);
-      clickCount += 1;
-      return true;
-    }
-
-    const result = judgeBeatInput(currentBeat, clickTime);
-    beatQueueResults.push({ status: 'judged', judgement: result.label });
+    const judgement = judgePressTiming(clickTime, clickCount);
     userPresses.push(clickTime);
+    pressJudgements.push(judgement);
+    reactionTargetTimes = buildReactionBeatTargets(expectedClickTimes, userPresses);
     clickCount += 1;
-    lastInputWasEarly = result.offsetMs < 0;
-    lastInputWasLate = result.offsetMs > 0;
-    activeBeatQueueIndex += 1;
 
-    if (activeBeatQueueIndex >= activeBeatQueue.length) {
+    if (clickCount >= requiredClicks) {
       hasPlayerInput = true;
+      evaluateRound();
     }
 
-    return result.label !== 'Miss';
+    return true;
   }
 
   function onKeyDown(e) {
     if (state !== 'input' || e.ctrlKey || e.altKey || e.metaKey || hasPlayerInput) return;
     const clickTime = safeNow();
-    registerInput(clickTime);
+    registerPress(clickTime);
   }
 
   function evaluateRound() {
-    if (!roundEvaluationGuard.markSettled()) return;
-
     if (inputTimeout) {
       clearTimeout(inputTimeout);
       inputTimeout = null;
-    }
-
-    const timeAtEnd = safeNow();
-    const queueProgress = advanceBeatQueueForTime(activeBeatQueue, activeBeatQueueIndex, timeAtEnd);
-    if (queueProgress.missedBeat) {
-      beatQueueResults.push({ status: 'judged', judgement: 'Miss' });
-      activeBeatQueueIndex = queueProgress.currentIndex;
     }
 
     let judgement = 'Miss';
@@ -351,27 +322,12 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       if (!devInjectPersistent) {
         devInjectJudgement = null;
       }
-    } else if (beatQueueResults.length > 0) {
-      const summary = beatQueueResults.reduce((acc, result) => {
-        if (result.judgement === 'Perfect') acc.perfects += 1;
-        else if (result.judgement === 'Good') acc.goods += 1;
-        else acc.misses += 1;
-        return acc;
-      }, { perfects: 0, goods: 0, misses: 0 });
-
-      if (summary.perfects >= Math.max(1, Math.floor(beatQueueResults.length * 0.6))) {
+    } else if (pressJudgements.length > 0) {
+      const perfects = pressJudgements.filter((entry) => entry === 'Perfect').length;
+      const goods = pressJudgements.filter((entry) => entry === 'Good').length;
+      if (perfects === pressJudgements.length) {
         judgement = 'Perfect';
-      } else if (summary.goods + summary.perfects > 0) {
-        judgement = 'Good';
-      }
-    } else if (userPresses.length > 0) {
-      const comparisonCount = Math.min(requiredClicks, userPresses.length);
-      const expectedSlice = expectedClickTimes.slice(0, comparisonCount);
-      const actualSlice = userPresses.slice(0, comparisonCount);
-      const rhythmScore = scoreRhythmPattern(expectedSlice, actualSlice);
-      const tolerance = getTimingTolerance();
-      const goodLimitMs = tolerance.good * 1000;
-      if (rhythmScore.averageErrorMs <= goodLimitMs) {
+      } else if (goods + perfects > 0) {
         judgement = 'Good';
       }
     }
@@ -402,12 +358,9 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     }
 
     lastJudgement = judgement.label;
-
     onUpdateHUDSafe();
 
-    const transition = resolveJudgementTransition(judgementLabel);
-
-    if (transition.shouldEndRun) {
+    if (judgement.label === 'Miss') {
       state = 'gameover';
       lastJudgement = judgementLabel;
       onUpdateHUDSafe();
@@ -457,27 +410,19 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     const rect = canvas.getBoundingClientRect();
     const px = e.clientX - rect.left;
 
-    if (px < canvas.width / 2 || !e.clientX) {
+    if (px < canvas.width / 2) {
       const clickTime = safeNow();
-      registerInput(clickTime);
+      registerPress(clickTime);
     }
   }
 
   function handleSpaceInput() {
     const clickTime = safeNow();
-    registerInput(clickTime);
+    registerPress(clickTime);
   }
 
   function triggerGameOver() {
     if (state === 'gameover') return;
-    if (currentRound < totalRounds) {
-      state = 'idle';
-      if (inputTimeout) {
-        clearTimeout(inputTimeout);
-        inputTimeout = null;
-      }
-      return;
-    }
     state = 'gameover';
     lastJudgement = 'Game Over';
     onUpdateHUDSafe();
@@ -571,32 +516,24 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   }
 
   function validateClickTiming(clickTime) {
-    const currentBeat = activeBeatQueue[activeBeatQueueIndex];
-    if (currentBeat && typeof currentBeat.targetTime === 'number') {
-      const offsetMs = (clickTime - currentBeat.targetTime) * 1000;
-      return offsetMs >= -500 && offsetMs <= 150;
+    if (clickCount >= requiredClicks) {
+      return false;
     }
 
-    if (expectedClickTimes && expectedClickTimes.length) {
-      const tol = getTimingTolerance(clickCount);
-      const nextIdx = clickCount;
-      const nextExpected = expectedClickTimes[nextIdx];
-      if (typeof nextExpected === 'number') {
-        const earliest = nextExpected - tol.good;
-        const latest = nextExpected + tol.good;
-        return clickTime >= earliest && clickTime <= latest;
-      }
+    if (clickCount > 0 && clickTime <= userPresses[clickCount - 1]) {
+      return false;
     }
 
     return true;
   }
 
-  function getTimingTolerance(beatIndex = null) {
-    if (typeof beatIndex === 'number') {
-      const overrideKey = currentTile ?? null;
-      return getPatternMemoryBeatTiming(difficulty.level || 'noob', beatIndex, patternTimingOverrides, overrideKey);
-    }
-    return getPatternMemoryTimingTolerance(difficulty.level || 'noob');
+  function getTimingTolerance() {
+    const difficultyLevel = difficulty.level || 'noob';
+    return {
+      perfectWindowMs: 24,
+      goodWindowMs: 70,
+      difficultyLevel
+    };
   }
 
   function setPlaybackSpeed(speedMultiplier = 1) {
@@ -626,8 +563,24 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
 
   function devAutoClickFunc(judgement) {
     if (state !== 'input' || hasPlayerInput) return;
+    const normalizedJudgement = ['Perfect', 'Good'].includes(judgement) ? judgement : 'Good';
     const clickTime = safeNow();
-    registerInput(clickTime);
+    registerPress(clickTime);
+
+    if (normalizedJudgement === 'Perfect') {
+      score += 300;
+      combo += 1;
+      perfectCount += 1;
+      lastJudgement = 'Perfect';
+    } else {
+      score += 100;
+      combo += 1;
+      goodCount += 1;
+      lastJudgement = 'Good';
+    }
+
+    totalJudgements += 1;
+    onUpdateHUDSafe();
   }
 
   function devAddScoreFunc(amount) {
