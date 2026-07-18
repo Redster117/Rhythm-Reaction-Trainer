@@ -1,6 +1,14 @@
 // src/modes/keypress.js
 import { playKeyPressBeat } from '../audioKeyPress.js';
 
+function getPreferredKeyLabel(code) {
+  if (code.startsWith('Key')) return code.slice(3).toUpperCase();
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code === 'Minus') return '-';
+  if (code === 'Period') return '.';
+  return code;
+}
+
 export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onGameEnd, difficulty = {}, keybinds = {}, pattern = null, debug = false, keyboardOnly = true, soundEnabled = true } = {}) {
   const ctx = canvas.getContext('2d');
   let rafId = null;
@@ -30,10 +38,6 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     normalizedKeybinds[label] = keybinds[label];
   });
 
-  if (['veteran', 'experienced', 'expert', 'pro'].includes(difficultyLevel) && Math.random() > 0.5) {
-    availableLabels = availableLabels.slice().sort(() => Math.random() - 0.5);
-  }
-
   let keyHandler = null;
   let pointerHandler = null;
 
@@ -42,19 +46,7 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
   }
 
   function getDisplayKey(code) {
-    if (code.startsWith('Key')) {
-      return code.slice(3).toUpperCase();
-    }
-    if (code.startsWith('Digit')) {
-      return code.slice(5);
-    }
-    if (code === 'Minus') {
-      return '-';
-    }
-    if (code === 'Period') {
-      return '.';
-    }
-    return code;
+    return getPreferredKeyLabel(code);
   }
 
   function getKeyColor(label) {
@@ -192,7 +184,13 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
   }
 
   function handleKeyDown(e) {
-    if (['Space', 'Enter', 'Backspace'].includes(e.code)) return;
+    if (['Enter', 'Backspace'].includes(e.code)) return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (gameEnded) return;
+      handlePointerDown();
+      return;
+    }
     const nowKey = safeNow();
     const boundCodes = Object.values(normalizedKeybinds);
     if (boundCodes.length) {
@@ -299,9 +297,9 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
 
     ctx.fillStyle = '#e6eef6';
     ctx.font = '18px system-ui';
-    ctx.fillText('Key-Press Rhythm Trainer', 105, 24);
+    ctx.fillText('Key Press Trainer', 105, 24);
     ctx.font = '14px system-ui';
-    ctx.fillText('Press the key shown inside the circle when it reaches the bottom.', 205, 46);
+    ctx.fillText('Match the rhythm by pressing the displayed key when the notes reach the lane.', 205, 46);
 
     ctx.strokeStyle = 'rgba(255,255,255,0.22)';
     ctx.lineWidth = 1;
@@ -398,7 +396,7 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     forcedPersistent = true;
     const pendingCue = cues.find((cue) => !cue.hit) || cues[0];
     if (!pendingCue) return;
-    window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, code: pendingCue.code }));
+    handleInput(safeNow(), pendingCue.code);
   }
 
   function devAddScoreFunc(amount) {

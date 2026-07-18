@@ -2,7 +2,7 @@
 import { AudioScheduler } from './audio.js';
 import { startBeatClick } from './modes/beatclick.js';
 import startKeyPress from './modes/keypress.js';
-import startPatternMemory from './modes/patternmemory.js';
+import startPatternMemory from './modes/patternmemoryv3.js';
 import { initDevControls } from './developerControls.js';
 
 const STORAGE_USERS = 'rtr-users-v1';
@@ -33,6 +33,10 @@ const bgMusicFileInput = document.getElementById('bg-music-file');
 const bgMusicLoopToggle = document.getElementById('bg-music-loop');
 const bgMusicToggle = document.getElementById('bg-music-toggle');
 const patternGuideToggle = document.getElementById('pattern-guide-toggle');
+const patternGuideLayers = document.getElementById('pattern-guide-layers');
+const patternGuideMissToggle = document.getElementById('pattern-guide-miss-toggle');
+const patternGuideGoodToggle = document.getElementById('pattern-guide-good-toggle');
+const patternGuidePerfectToggle = document.getElementById('pattern-guide-perfect-toggle');
 const loginModal = document.getElementById('login-modal');
 const settingsModal = document.getElementById('settings-modal');
 const signupModal = document.getElementById('signup-modal');
@@ -69,7 +73,8 @@ let currentProgress = { bestScore: 0, totalPlays: 0, modeStats: {} };
 let currentKeybinds = getStoredKeybinds() || { ...DEFAULT_KEYBINDS };
 let backgroundMusicEnabled = false;
 let backgroundMusicLoop = true;
-let patternGuideEnabled = true;
+let patternGuideEnabled = false;
+let patternGuideHitboxLayers = { miss: true, good: true, perfect: true };
 let bgMusicAudio = null;
 let bgMusicPauseDepth = 0;
 let customBackgroundMusicBlob = '';
@@ -212,11 +217,32 @@ function updateRunControls() {
 let bgMusicAudioCtx = null;
 let bgMusicOsc = null;
 let bgMusicGain = null;
+let bgMusicLoopTimer = null;
+let bgMusicLoopNodes = [];
+
+function stopBackgroundMusicNodes() {
+  if (bgMusicLoopTimer) {
+    clearTimeout(bgMusicLoopTimer);
+    bgMusicLoopTimer = null;
+  }
+  bgMusicLoopNodes.forEach((node) => {
+    try { node.stop?.(); } catch {}
+    try { node.disconnect?.(); } catch {}
+  });
+  bgMusicLoopNodes = [];
+}
 
 function startBackgroundMusic() {
   if (!backgroundMusicEnabled) return;
 
   if (customBackgroundMusicBlob) {
+    stopBackgroundMusicNodes();
+    if (bgMusicAudioCtx) {
+      bgMusicAudioCtx.close().catch(() => {});
+      bgMusicAudioCtx = null;
+      bgMusicGain = null;
+      bgMusicOsc = null;
+    }
     if (!bgMusicAudio || bgMusicAudio.src !== customBackgroundMusicBlob) {
       if (bgMusicAudio) {
         bgMusicAudio.pause();
@@ -230,22 +256,44 @@ function startBackgroundMusic() {
     return;
   }
 
+  if (bgMusicAudio) {
+    bgMusicAudio.pause();
+    bgMusicAudio.currentTime = 0;
+    bgMusicAudio = null;
+  }
+
   if (bgMusicAudioCtx) return;
   bgMusicAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
   bgMusicGain = bgMusicAudioCtx.createGain();
-  bgMusicGain.gain.value = 0.04;
-  bgMusicOsc = bgMusicAudioCtx.createOscillator();
-  bgMusicOsc.type = 'triangle';
-  bgMusicOsc.frequency.setValueAtTime(110, bgMusicAudioCtx.currentTime);
-  const lfo = bgMusicAudioCtx.createOscillator();
-  const lfoGain = bgMusicAudioCtx.createGain();
-  lfo.frequency.value = 0.25;
-  lfoGain.gain.value = 30;
-  lfo.connect(lfoGain);
-  lfoGain.connect(bgMusicOsc.frequency);
-  bgMusicOsc.connect(bgMusicGain).connect(bgMusicAudioCtx.destination);
-  bgMusicOsc.start();
-  lfo.start();
+  bgMusicGain.gain.value = 0.03;
+  bgMusicGain.connect(bgMusicAudioCtx.destination);
+
+  const notes = [220, 277.18, 329.63, 392];
+  const noteLength = 0.82;
+  const intervalMs = 1250;
+  let index = 0;
+
+  const scheduleNextNote = () => {
+    const now = bgMusicAudioCtx.currentTime;
+    const freq = notes[index % notes.length];
+    const osc = bgMusicAudioCtx.createOscillator();
+    const gainNode = bgMusicAudioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.linearRampToValueAtTime(index % 2 === 0 ? 0.018 : 0.012, now + 0.05);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + noteLength);
+    osc.connect(gainNode);
+    gainNode.connect(bgMusicGain);
+    osc.start(now);
+    osc.stop(now + noteLength);
+    bgMusicLoopNodes.push(osc);
+    bgMusicLoopNodes.push(gainNode);
+    index += 1;
+    bgMusicLoopTimer = setTimeout(scheduleNextNote, intervalMs);
+  };
+
+  scheduleNextNote();
   bgMusicAudioCtx.onstatechange = () => {
     if (bgMusicAudioCtx && bgMusicAudioCtx.state === 'suspended') {
       bgMusicAudioCtx.resume().catch(() => {});
@@ -286,6 +334,7 @@ function stopBackgroundMusic() {
     bgMusicAudio.currentTime = 0;
     bgMusicAudio = null;
   }
+  stopBackgroundMusicNodes();
   if (bgMusicOsc) {
     bgMusicOsc.stop();
     bgMusicOsc.disconnect();
@@ -459,6 +508,12 @@ function toggleSettingsModal() {
     bgMusicLoopToggle.checked = backgroundMusicLoop;
     bgMusicFileInput.value = '';
     patternGuideToggle.checked = patternGuideEnabled;
+    patternGuideMissToggle.checked = patternGuideHitboxLayers.miss;
+    patternGuideGoodToggle.checked = patternGuideHitboxLayers.good;
+    patternGuidePerfectToggle.checked = patternGuideHitboxLayers.perfect;
+    if (patternGuideLayers) {
+      patternGuideLayers.hidden = !patternGuideEnabled;
+    }
     accountPanel.hidden = !currentUser;
   }
 }
@@ -500,6 +555,34 @@ function normalizeKeybindInput(value) {
   if (/^KEY[A-Z]$/.test(upper)) return trimmed;
   if (/^DIGIT[0-9]$/.test(upper)) return trimmed;
   return trimmed;
+}
+
+function normalizeKeybindState(keybinds = {}) {
+  const normalized = { ...DEFAULT_KEYBINDS, ...keybinds };
+  const usedCodes = new Set();
+  const orderedLabels = Object.keys(DEFAULT_KEYBINDS);
+  orderedLabels.forEach((label) => {
+    const rawCode = normalized[label] || DEFAULT_KEYBINDS[label];
+    const candidate = normalizeKeybindInput(rawCode);
+    if (usedCodes.has(candidate)) {
+      normalized[label] = DEFAULT_KEYBINDS[label];
+    } else {
+      usedCodes.add(candidate);
+      normalized[label] = candidate;
+    }
+  });
+  return normalized;
+}
+
+function setKeybindValue(label, code) {
+  const normalized = normalizeKeybindInput(code);
+  const duplicateLabel = Object.entries(currentKeybinds).find(([otherLabel, otherCode]) => otherLabel !== label && otherCode === normalized);
+  if (duplicateLabel) {
+    showMessage(`"${displayKeybindLabel(normalized)}" is already assigned to ${duplicateLabel[0]}.`, true);
+    return false;
+  }
+  currentKeybinds[label] = normalized;
+  return true;
 }
 
 function displayKeybindLabel(code) {
@@ -556,8 +639,12 @@ function handleKeybindCapture(event, label) {
   event.preventDefault();
   event.stopPropagation();
   const normalized = normalizeKeybindInput(capturedValue);
+  if (!setKeybindValue(label, normalized)) {
+    input.value = displayKeybindLabel(currentKeybinds[label] || DEFAULT_KEYBINDS[label]);
+    endKeybindCapture(label);
+    return;
+  }
   input.value = displayKeybindLabel(normalized);
-  currentKeybinds[label] = normalized;
   endKeybindCapture(label);
 }
 
@@ -577,6 +664,7 @@ function setupKeybindInputs() {
 }
 
 function loadKeybindInputs() {
+  currentKeybinds = normalizeKeybindState(currentKeybinds);
   Object.keys(bindInputs).forEach((label) => {
     bindInputs[label].value = displayKeybindLabel(currentKeybinds[label] || DEFAULT_KEYBINDS[label]);
   });
@@ -695,7 +783,9 @@ function saveUserData() {
     audioSettings: {
       backgroundMusicEnabled,
       customBackgroundMusicUrl,
-      backgroundMusicLoop
+      backgroundMusicLoop,
+      patternGuideEnabled,
+      patternGuideHitboxLayers
     }
   };
   setStoredUsers(users);
@@ -755,6 +845,10 @@ async function loginUser() {
     backgroundMusicEnabled = typeof savedAudio.backgroundMusicEnabled === 'boolean' ? savedAudio.backgroundMusicEnabled : backgroundMusicEnabled;
     customBackgroundMusicUrl = savedAudio.customBackgroundMusicUrl || customBackgroundMusicUrl;
     backgroundMusicLoop = typeof savedAudio.backgroundMusicLoop === 'boolean' ? savedAudio.backgroundMusicLoop : true;
+    patternGuideEnabled = typeof savedAudio.patternGuideEnabled === 'boolean' ? savedAudio.patternGuideEnabled : patternGuideEnabled;
+    patternGuideHitboxLayers = savedAudio.patternGuideHitboxLayers && typeof savedAudio.patternGuideHitboxLayers === 'object'
+      ? { miss: savedAudio.patternGuideHitboxLayers.miss !== false, good: savedAudio.patternGuideHitboxLayers.good !== false, perfect: savedAudio.patternGuideHitboxLayers.perfect !== false }
+      : patternGuideHitboxLayers;
     showMessage(`Welcome back, ${username}.`);
   }
   currentUser = username;
@@ -796,7 +890,9 @@ async function signupUser() {
     audioSettings: {
       backgroundMusicEnabled,
       customBackgroundMusicUrl,
-      backgroundMusicLoop
+      backgroundMusicLoop,
+      patternGuideEnabled,
+      patternGuideHitboxLayers
     }
   };
   setStoredUsers(users);
@@ -876,6 +972,11 @@ saveSettingsBtn.addEventListener('click', () => {
   backgroundMusicEnabled = bgMusicToggle.checked;
   backgroundMusicLoop = bgMusicLoopToggle.checked;
   patternGuideEnabled = patternGuideToggle.checked;
+  patternGuideHitboxLayers = {
+    miss: patternGuideMissToggle?.checked !== false,
+    good: patternGuideGoodToggle?.checked !== false,
+    perfect: patternGuidePerfectToggle?.checked !== false
+  };
   
   if (backgroundMusicEnabled) {
     startBackgroundMusic();
@@ -1000,7 +1101,20 @@ bgMusicToggle.addEventListener('change', () => {
 
 patternGuideToggle?.addEventListener('change', () => {
   patternGuideEnabled = patternGuideToggle.checked;
+  if (patternGuideLayers) {
+    patternGuideLayers.hidden = !patternGuideEnabled;
+  }
   showMessage(patternGuideEnabled ? 'Pattern guide enabled.' : 'Pattern guide disabled.');
+});
+
+[patternGuideMissToggle, patternGuideGoodToggle, patternGuidePerfectToggle].forEach((toggle) => {
+  toggle?.addEventListener('change', () => {
+    patternGuideHitboxLayers = {
+      miss: patternGuideMissToggle?.checked !== false,
+      good: patternGuideGoodToggle?.checked !== false,
+      perfect: patternGuidePerfectToggle?.checked !== false
+    };
+  });
 });
 
 
@@ -1023,6 +1137,26 @@ deleteAccountBtn.addEventListener('click', () => {
 
 // Close modals on escape and handle backspace to stop
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'Enter' && !isGameRunning && !settingsModal.hidden) {
+    e.preventDefault();
+    saveSettingsBtn.click();
+    return;
+  }
+  if (e.code === 'Enter' && !isGameRunning && !loginModal.hidden) {
+    e.preventDefault();
+    loginSubmitBtn.click();
+    return;
+  }
+  if (e.code === 'Enter' && !isGameRunning && !signupModal.hidden) {
+    e.preventDefault();
+    signupSubmitBtn.click();
+    return;
+  }
+  if (e.code === 'Enter' && !isGameRunning) {
+    e.preventDefault();
+    startBtn.click();
+    return;
+  }
   if (e.code === 'Escape') {
     loginModal.hidden = true;
     settingsModal.hidden = true;
@@ -1220,6 +1354,14 @@ switch (selectedMode) {
       onGameEnd: stopGame,
       soundEnabled: true
     });
+    if (gameInstance && typeof gameInstance.handleSpaceInput === 'function') {
+      window.addEventListener('keydown', (event) => {
+        if (event.code === 'Space' && isGameRunning && selectedMode === 'beat' && !event.repeat) {
+          event.preventDefault();
+          gameInstance.handleSpaceInput();
+        }
+      });
+    }
     break;
   case 'key':
     gameInstance = startKeyPress({
@@ -1241,8 +1383,18 @@ switch (selectedMode) {
       difficulty: difficultyWithLevel,
       onGameEnd: stopGame,
       customPattern,
-      showGuide: patternGuideEnabled
+      showGuide: patternGuideEnabled,
+      hitboxLayers: patternGuideHitboxLayers,
+      timingOverrides: null
     });
+    if (gameInstance && typeof gameInstance.handleSpaceInput === 'function') {
+      window.addEventListener('keydown', (event) => {
+        if (event.code === 'Space' && isGameRunning && selectedMode === 'pattern' && !event.repeat) {
+          event.preventDefault();
+          gameInstance.handleSpaceInput();
+        }
+      });
+    }
     break;
 }
 
@@ -1285,7 +1437,10 @@ function loadAudioSettings() {
   backgroundMusicEnabled = typeof settings.backgroundMusicEnabled === 'boolean' ? settings.backgroundMusicEnabled : false;
   customBackgroundMusicUrl = settings.customBackgroundMusicUrl || '';
   backgroundMusicLoop = typeof settings.backgroundMusicLoop === 'boolean' ? settings.backgroundMusicLoop : true;
-  patternGuideEnabled = typeof settings.patternGuideEnabled === 'boolean' ? settings.patternGuideEnabled : true;
+  patternGuideEnabled = typeof settings.patternGuideEnabled === 'boolean' ? settings.patternGuideEnabled : false;
+  patternGuideHitboxLayers = settings.patternGuideHitboxLayers && typeof settings.patternGuideHitboxLayers === 'object'
+    ? { miss: settings.patternGuideHitboxLayers.miss !== false, good: settings.patternGuideHitboxLayers.good !== false, perfect: settings.patternGuideHitboxLayers.perfect !== false }
+    : { miss: true, good: true, perfect: true };
 }
 
 function saveAudioSettings() {
@@ -1293,7 +1448,8 @@ function saveAudioSettings() {
     backgroundMusicEnabled,
     customBackgroundMusicUrl,
     backgroundMusicLoop,
-    patternGuideEnabled
+    patternGuideEnabled,
+    patternGuideHitboxLayers
   });
 }
 
@@ -1311,4 +1467,3 @@ function initialiseUI() {
 }
 
 initialiseUI();
-
