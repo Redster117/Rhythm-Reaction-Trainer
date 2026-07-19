@@ -2,7 +2,7 @@
 import { AudioSchedulerPM } from '../audioPatternMemory.js';
 import PatternGuide from '../patternGuide.js';
 import { getPatternMemoryTimingTolerance } from '../timingConfig.js';
-import { buildReactionBeatTargets, judgeTimedReactionBeat } from '../utils.js';
+import { buildReactionBeatTargets, judgeTimedReactionBeat, summarizePatternMemoryRoundJudgement } from '../utils.js';
 
 export function getPatternMemoryComboDelta(level = '', judgementLabel = '') {
   if (level === 'noob' && judgementLabel === 'Perfect') return 2;
@@ -168,7 +168,7 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       const applyRolling = state === 'preview' ? 0 : rollingOffset;
       const beatTimings = timelineTimes.map((_, beatIndex) => getTimingTolerance(beatIndex));
       const guideTargetTimes = reactionTargetTimes.length ? reactionTargetTimes : timelineTimes;
-      guide.update({ timelineTimes, targetTimes: guideTargetTimes, userPresses, rollingOffset: applyRolling, renderOffset, leadTime, tolerance: getTimingTolerance(), visible: true, hitboxLayers: hitboxLayers || undefined, beatTimings });
+      guide.update({ timelineTimes, targetTimes: guideTargetTimes, userPresses, rollingOffset: applyRolling, renderOffset, leadTime, tolerance: getTimingTolerance(), visible: true, hitboxLayers: { miss: false, good: false, perfect: false }, beatTimings });
       guide.draw(now);
     }
 
@@ -270,6 +270,8 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     const officialBeatTimeSeconds = expectedClickTimes[pressIndex];
     const previousPressTimeSeconds = userPresses[pressIndex - 1] ?? null;
     const previousOfficialBeatTimeSeconds = pressIndex > 0 ? expectedClickTimes[pressIndex - 1] : null;
+    const adaptiveTargetTimes = buildReactionBeatTargets(expectedClickTimes, userPresses);
+    const adaptiveTargetTimeSeconds = adaptiveTargetTimes[pressIndex] ?? officialBeatTimeSeconds;
 
     const judgement = judgeTimedReactionBeat({
       beatIndex: pressIndex,
@@ -279,7 +281,8 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       previousOfficialBeatTimeSeconds,
       perfectWindowMs,
       goodWindowMs,
-      forcePerfect: currentTile === 1 && pressIndex === 0
+      forcePerfect: currentTile === 1 && pressIndex === 0,
+      targetTimeSeconds: adaptiveTargetTimeSeconds
     });
 
     return judgement;
@@ -322,14 +325,8 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
       if (!devInjectPersistent) {
         devInjectJudgement = null;
       }
-    } else if (pressJudgements.length > 0) {
-      const perfects = pressJudgements.filter((entry) => entry === 'Perfect').length;
-      const goods = pressJudgements.filter((entry) => entry === 'Good').length;
-      if (perfects === pressJudgements.length) {
-        judgement = 'Perfect';
-      } else if (goods + perfects > 0) {
-        judgement = 'Good';
-      }
+    } else {
+      judgement = summarizePatternMemoryRoundJudgement(pressJudgements);
     }
 
     applyJudgement(judgement);
@@ -529,9 +526,18 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
 
   function getTimingTolerance() {
     const difficultyLevel = difficulty.level || 'noob';
+    const map = {
+      noob: { perfectWindowMs: 20, goodWindowMs: 35 },
+      ez: { perfectWindowMs: 18, goodWindowMs: 32 },
+      veteran: { perfectWindowMs: 16, goodWindowMs: 28 },
+      experienced: { perfectWindowMs: 14, goodWindowMs: 24 },
+      expert: { perfectWindowMs: 12, goodWindowMs: 20 },
+      pro: { perfectWindowMs: 10, goodWindowMs: 16 }
+    };
+    const preset = map[difficultyLevel] || map.noob;
     return {
-      perfectWindowMs: 24,
-      goodWindowMs: 70,
+      perfectWindowMs: preset.perfectWindowMs,
+      goodWindowMs: preset.goodWindowMs,
       difficultyLevel
     };
   }

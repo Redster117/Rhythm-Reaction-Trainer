@@ -12,16 +12,19 @@ export default class PatternGuide {
       height: 48,
       preBufferPctOfLead: 0,
       debug: true,
-      perfectWindowMs: 24,
-      goodWindowMs: 70,
-      missWindowMs: 140,
+      perfectWindowMs: 25,
+      goodWindowMs: 50,
+      missWindowMs: 50,
       perfectColor: 'rgba(34, 197, 94, 0.2)',
       goodColor: 'rgba(249, 115, 22, 0.28)',
       missColor: 'rgba(239, 68, 68, 0.12)',
       beatColor: '#d1e6ff',
       guideTextColor: '#e6eef6',
+      showBeatLabels: false,
+      showHitboxes: true,
+      showCursor: true,
       hitboxLayers: {
-        miss: true,
+        miss: false,
         good: true,
         perfect: true
       }
@@ -111,53 +114,45 @@ export default class PatternGuide {
       ctx.lineTo(px, guideY + guideH - 8);
       ctx.stroke();
 
-      const perfectWindow = Math.max(0.01, (this.opts.perfectWindowMs || 24) / 1000);
-      const goodWindow = Math.max(perfectWindow + 0.01, (this.opts.goodWindowMs || 70) / 1000);
-      const missWindow = Math.max(goodWindow + 0.01, (this.opts.missWindowMs || 140) / 1000);
-      const perfectStart = beatTime - perfectWindow / 2;
-      const perfectEnd = beatTime + perfectWindow / 2;
-      const goodStart = beatTime - goodWindow;
-      const goodEnd = beatTime - perfectWindow / 2;
-      if (this.opts.hitboxLayers?.miss !== false) {
-        const missStart = beatTime - missWindow;
-        const missEnd = beatTime + missWindow * 0.25;
-        const missX = slotX(missStart);
-        const missRight = slotX(missEnd);
-        ctx.fillStyle = this.opts.missColor || 'rgba(239, 68, 68, 0.12)';
-        ctx.fillRect(Math.min(missX, missRight), guideY + 10, Math.max(4, Math.abs(missRight - missX)), guideH - 20);
+      if (this.opts.showHitboxes) {
+        const perfectWindow = Math.max(0.01, (this.opts.perfectWindowMs || 25) / 1000);
+        const goodWindow = Math.max(perfectWindow + 0.01, (this.opts.goodWindowMs || 50) / 1000);
+        const perfectStart = beatTime - perfectWindow;
+        const perfectEnd = beatTime + perfectWindow;
+        const goodStart = beatTime - goodWindow;
+        const goodEnd = beatTime + goodWindow;
+
+        if (this.opts.hitboxLayers?.good !== false) {
+          const goodX = slotX(goodStart);
+          const goodRight = slotX(goodEnd);
+          ctx.fillStyle = this.opts.goodColor || 'rgba(249, 115, 22, 0.28)';
+          ctx.fillRect(Math.min(goodX, goodRight), guideY + 13, Math.max(4, Math.abs(goodRight - goodX)), guideH - 26);
+        }
+
+        if (this.opts.hitboxLayers?.perfect !== false) {
+          const perfectX = slotX(perfectStart);
+          const perfectRight = slotX(perfectEnd);
+          ctx.fillStyle = this.opts.perfectColor || 'rgba(34, 197, 94, 0.2)';
+          ctx.fillRect(Math.min(perfectX, perfectRight), guideY + 16, Math.max(3, Math.abs(perfectRight - perfectX)), guideH - 32);
+        }
       }
 
-      if (this.opts.hitboxLayers?.good !== false) {
-        const goodX = slotX(goodStart);
-        const goodRight = slotX(goodEnd);
-        ctx.fillStyle = this.opts.goodColor || 'rgba(249, 115, 22, 0.28)';
-        ctx.fillRect(Math.min(goodX, goodRight), guideY + 13, Math.max(4, Math.abs(goodRight - goodX)), guideH - 26);
-      }
-
-      if (this.opts.hitboxLayers?.perfect !== false) {
-        const perfectX = slotX(perfectStart);
-        const perfectRight = slotX(perfectEnd);
-        ctx.fillStyle = this.opts.perfectColor || 'rgba(34, 197, 94, 0.2)';
-        ctx.fillRect(Math.min(perfectX, perfectRight), guideY + 16, Math.max(3, Math.abs(perfectRight - perfectX)), guideH - 32);
+      if (this.opts.showBeatLabels) {
+        const beatLabelMs = Math.round((beatTime - now) * 1000);
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = '11px system-ui';
+        ctx.fillText(`Beat ${beatLabelMs}ms`, px + 4, guideY + 18);
       }
     });
 
-    const dotProgress = Math.min(Math.max((displayedNow - firstDisplay) / range, 0), 1);
-    const dotX = slotX(displayedNow);
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(dotX, guideY + guideH / 2, Math.max(4, guideH * 0.12), 0, Math.PI * 2);
-    ctx.fill();
-
-    this.userPresses.forEach((pressTime) => {
-      const displayPress = pressTime + this.rollingOffset + this.renderOffset;
-      if (displayPress < firstDisplay || displayPress > lastDisplay) return;
-      const pressX = slotX(displayPress);
-      ctx.fillStyle = '#facc15';
+    if (this.opts.showCursor) {
+      const dotProgress = Math.min(Math.max((displayedNow - firstDisplay) / range, 0), 1);
+      const dotX = slotX(displayedNow);
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(pressX, guideY + guideH / 2, Math.max(3, guideH * 0.10), 0, Math.PI * 2);
+      ctx.arc(dotX, guideY + guideH / 2, Math.max(4, guideH * 0.12), 0, Math.PI * 2);
       ctx.fill();
-    });
+    }
 
     ctx.fillStyle = this.opts.guideTextColor || '#e6eef6';
     const fontSize = Math.max(4, Math.floor(guideH * 0.16));

@@ -85,6 +85,11 @@ let gameInstance = null;
 const devControls = initDevControls();
 let demoGifUnlocked = false;
 let demoGifUnlockReady = false;
+
+devControls.setStatsOverrideRestoreCallback(restoreStatsOverrideSnapshot);
+devControls.setStatsOverrideOpenCallback(() => {
+  devControls.createStatsOverrideSnapshot(currentProgress);
+});
 // Spinning-heavy easter state
 let spinningHeavyHoverActive = false;
 let spinningHeavySequenceIndex = 0;
@@ -196,6 +201,74 @@ function updateProfileInfo() {
   } else {
     profileInfo.textContent = `Logged in as ${currentUser}. Press Backspace to stop.`;
   }
+}
+
+function applyScoreMultiplier(score) {
+  if (!devControls || !devControls.isScoreMultiplierEnabled?.()) return score;
+  return Math.round(score * devControls.getScoreMultiplier());
+}
+
+function attachStatsEditingHandlers(container = document) {
+  const editableCells = container.querySelectorAll('.dev-editable-stat, .dev-editable-cell');
+  editableCells.forEach((cell) => {
+    cell.ondblclick = handleDevStatEdit;
+  });
+}
+
+function handleDevStatEdit(event) {
+  if (!devControls || !devControls.isStatsEditEnabled?.()) return;
+  const target = event.currentTarget;
+  const field = target.dataset.field;
+  const mode = target.dataset.mode;
+  const difficulty = target.dataset.difficulty;
+  const currentText = target.textContent.trim();
+  let currentValue = currentText.replace('%', '').replace('ms', '').trim();
+  if (field === 'bestPrecision' && currentText === 'N/A') currentValue = '';
+  const promptLabel = `Edit ${field.replace(/([A-Z])/g, ' $1')} ${mode ? `for ${mode} ${difficulty}` : ''}`;
+  const newValue = window.prompt(promptLabel, currentValue);
+  if (newValue === null) return;
+  const normalized = newValue.trim();
+  if (normalized === '') return;
+  const numeric = Number(normalized);
+  if (!Number.isFinite(numeric) && !(field === 'bestPrecision' && normalized.toUpperCase() === 'N/A')) return;
+
+  if (mode && difficulty) {
+    const stats = currentProgress.modeStats[mode] && currentProgress.modeStats[mode][difficulty];
+    if (!stats) return;
+    if (field === 'plays') {
+      stats.plays = Math.max(0, Math.round(numeric));
+      stats.totalAccuracy = Math.round((stats.accuracy || 0) * stats.plays);
+    } else if (field === 'accuracy') {
+      stats.accuracy = Math.max(0, Math.min(100, Math.round(numeric)));
+      stats.totalAccuracy = Math.round(stats.accuracy * (stats.plays || 1));
+    } else if (field === 'bestPrecision') {
+      stats.bestPrecision = normalized.toUpperCase() === 'N/A' ? Infinity : Math.max(0, Math.round(numeric));
+    } else if (field === 'bestCombo') {
+      stats.bestCombo = Math.max(0, Math.round(numeric));
+    } else if (field === 'bestScore') {
+      stats.bestScore = Math.max(0, Math.round(numeric));
+    }
+  } else {
+    if (field === 'totalPlays') {
+      currentProgress.totalPlays = Math.max(0, Math.round(numeric));
+    } else if (field === 'bestScore') {
+      currentProgress.bestScore = Math.max(0, Math.round(numeric));
+    }
+  }
+
+  if (currentUser) {
+    saveUserData();
+  }
+  if (statsDisplayed) {
+    displayStats();
+  }
+}
+
+function restoreStatsOverrideSnapshot(snapshot) {
+  if (!snapshot) return;
+  currentProgress = JSON.parse(JSON.stringify(snapshot));
+  if (currentUser) saveUserData();
+  if (statsDisplayed) displayStats();
 }
 
 const MODE_DESCRIPTIONS = {
@@ -373,7 +446,7 @@ function displayStats() {
   const modeHighScores = getModeHighScores();
   profileInfo.innerHTML = `
     <strong>Stats for ${currentUser}:</strong><br>
-    Total Plays: ${totalPlays}<br>
+    Total Plays: <span class="dev-editable-cell" data-field="totalPlays">${totalPlays}</span><br>
     Most Played Mode: ${mostPlayedMode}<br>
     <strong>High Scores per Mode:</strong><br>
     Beat: ${modeHighScores.beat}<br>
@@ -383,6 +456,7 @@ function displayStats() {
   `;
   setTimeout(() => {
     document.getElementById('view-detailed-stats').onclick = showDetailedStats;
+    attachStatsEditingHandlers(profileInfo);
   }, 0);
 }
 
@@ -419,7 +493,8 @@ function showDetailedStats() {
     <strong>Detailed Stats for ${currentUser}:</strong><br>
     <select id="mode-select-stats"><option value="beat">Beat</option>
       <option value="key">Key</option>
-      <option value="pattern">Pattern</option>
+      <option value="pattern">Pattern</option>  return result;
+
     </select>
     <select id="sort-select">
       <option value="accuracy">Accuracy</option>
@@ -451,7 +526,8 @@ function updateDetailedStats() {
       accuracy: s.accuracy || 0,
       precision: s.bestPrecision || Infinity,
       combo: s.bestCombo || 0,
-      plays: s.plays || 0
+      plays: s.plays || 0,
+      bestScore: s.bestScore || 0
     });
   }
   stats.sort((a, b) => {
@@ -467,12 +543,13 @@ function updateDetailedStats() {
       return valA - valB;
     }
   });
-  let html = '<table><tr><th>Difficulty</th><th>Plays</th><th>Accuracy</th><th>Best Precision</th><th>Best Combo</th></tr>';
+  let html = '<table><tr><th>Difficulty</th><th>Plays</th><th>Accuracy</th><th>Best Precision</th><th>Best Combo</th><th>High Score</th></tr>';
   stats.forEach(s => {
-    html += `<tr><td>${s.difficulty}</td><td>${s.plays}</td><td>${s.accuracy}%</td><td>${s.precision === Infinity ? 'N/A' : s.precision + 'ms'}</td><td>${s.combo}</td></tr>`;
+    html += `<tr><td>${s.difficulty}</td><td><span class="dev-editable-stat" data-field="plays" data-mode="${mode}" data-difficulty="${s.difficulty}">${s.plays}</span></td><td><span class="dev-editable-stat" data-field="accuracy" data-mode="${mode}" data-difficulty="${s.difficulty}">${s.accuracy}</span>%</td><td><span class="dev-editable-stat" data-field="bestPrecision" data-mode="${mode}" data-difficulty="${s.difficulty}">${s.precision === Infinity ? 'N/A' : s.precision}</span>${s.precision === Infinity ? '' : 'ms'}</td><td><span class="dev-editable-stat" data-field="bestCombo" data-mode="${mode}" data-difficulty="${s.difficulty}">${s.combo}</span></td><td><span class="dev-editable-stat" data-field="bestScore" data-mode="${mode}" data-difficulty="${s.difficulty}">${s.bestScore}</span></td></tr>`;
   });
   html += '</table>';
   document.getElementById('stats-details').innerHTML = html;
+  attachStatsEditingHandlers(document.getElementById('stats-details'));
 }
 
 function updateHeaderControls() {
@@ -801,19 +878,20 @@ function saveUserData() {
 
 function saveProgress(score, accuracy, combo, perfects, precision) {
   if (!currentUser) return;
+  const effectiveScore = applyScoreMultiplier(score);
   currentProgress.totalPlays += 1;
-  currentProgress.bestScore = Math.max(currentProgress.bestScore || 0, score);
+  currentProgress.bestScore = Math.max(currentProgress.bestScore || 0, effectiveScore);
   
   const difficulty = difficultySelect.value;
   if (!currentProgress.modeStats[selectedMode]) {
     currentProgress.modeStats[selectedMode] = {};
   }
   if (!currentProgress.modeStats[selectedMode][difficulty]) {
-    currentProgress.modeStats[selectedMode][difficulty] = { bestScore: 0, plays: 0, totalAccuracy: 0, accuracy: 0, bestCombo: 0, totalPerfects: 0, bestPrecision: Infinity };
+    currentProgress.modeStats[selectedMode][difficulty] = { bestScore: 0, plays: 0, totalAccuracy: 0, accuracy: 0, bestCombo: 0, totalPerfects: 0, bestPrecision: Infinity, highScore: 0 };
   }
   const modeStats = currentProgress.modeStats[selectedMode][difficulty];
   modeStats.plays += 1;
-  modeStats.bestScore = Math.max(modeStats.bestScore, score);
+  modeStats.bestScore = Math.max(modeStats.bestScore, effectiveScore);
   modeStats.totalAccuracy += accuracy;
   modeStats.accuracy = Math.round(modeStats.totalAccuracy / modeStats.plays);
   modeStats.bestCombo = Math.max(modeStats.bestCombo, combo);
@@ -1419,13 +1497,14 @@ switch (selectedMode) {
 });
 
 function updateHUD({ score, combo, lastJudgement, accuracy, precision }) {
-  document.getElementById('score').textContent = `Score: ${score}`;
+  const effectiveScore = applyScoreMultiplier(score);
+  document.getElementById('score').textContent = `Score: ${effectiveScore}`;
   document.getElementById('combo').textContent = `Combo: ${combo}`;
   document.getElementById('last-judgement').textContent = `Last: ${lastJudgement}`;
   document.getElementById('accuracy').textContent = `Accuracy: ${accuracy ?? 100}%`;
   document.getElementById('precision').textContent = `Precision: ${precision ?? 0} ms`;
-  if (score > (currentProgress.bestScore || 0)) {
-    currentProgress.bestScore = score;
+  if (effectiveScore > (currentProgress.bestScore || 0)) {
+    currentProgress.bestScore = effectiveScore;
     saveUserData();
   }
   // Do not persist progress on every HUD update to avoid excessive writes.

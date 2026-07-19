@@ -1,5 +1,5 @@
 // src/audioPatternMemory.js
-// Audio scheduler for Pattern Memory mode with 7 tile beat patterns
+// Audio scheduler for Pattern Memory mode with stable beat timelines per tile.
 
 export class AudioSchedulerPM {
   constructor() {
@@ -11,51 +11,14 @@ export class AudioSchedulerPM {
     this.onBeatCallbacks = [];
     this.startTime = 0;
 
-    // Define beat patterns for each tile (1-7)
-    // Each pattern is an array of { frequency, duration, delayFromStart }
     this.beatPatterns = {
-      1: [ // R1: Short single beat
-        { frequency: 440, duration: 0.1, delayFromStart: 0 }
-      ],
-      2: [ // O2: Two beats
-        { frequency: 440, duration: 0.1, delayFromStart: 0 },
-        { frequency: 440, duration: 0.1, delayFromStart: 0.50 }
-      ],
-      3: [ // Y3: Three beats ascending
-        { frequency: 440, duration: 0.1, delayFromStart: 0 },
-        { frequency: 440, duration: 0.1, delayFromStart: 0.70 },
-        { frequency: 440, duration: 0.1, delayFromStart: 0.80 }
-      ],
-      4: [ // G4: Quick double beat
-        { frequency: 440, duration: 0.08, delayFromStart: 0 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.20 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.40 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.60 }
-      ],
-      5: [ // B5: Four beats (syncopated)
-        { frequency: 440, duration: 0.08, delayFromStart: 0 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.30 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.40 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.50 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.80 }
-      ],
-      6: [ // Pu6: Descending pattern
-        { frequency: 440, duration: 0.08, delayFromStart: 0 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.20 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.40 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.53 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.73 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.86 }
-      ],
-      7: [ // Pi7: Long pattern with multiple notes
-        { frequency: 440, duration: 0.08, delayFromStart: 0 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.20 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.40 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.50 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.70 },
-        { frequency: 440, duration: 0.08, delayFromStart: 0.90 },
-        { frequency: 440, duration: 0.08, delayFromStart: 1.00 }
-      ]
+      1: [0.00],
+      2: [0.00, 0.50],
+      3: [0.00, 0.70, 0.80],
+      4: [0.00, 0.20, 0.40, 0.60],
+      5: [0.00, 0.30, 0.40, 0.50, 0.80],
+      6: [0.00, 0.20, 0.40, 0.53, 0.73, 0.86],
+      7: [0.00, 0.20, 0.40, 0.50, 0.70, 0.90, 1.00]
     };
   }
 
@@ -79,23 +42,17 @@ export class AudioSchedulerPM {
   }
 
   playTileBeat(tileNumber, startAt = null, speedMultiplier = 1) {
-    // tileNumber: 1-7 (R1-Pi7)
     if (!this.audioContext || !this.beatPatterns[tileNumber]) return;
 
-    const pattern = this.beatPatterns[tileNumber];
+    const delays = this.beatPatterns[tileNumber];
     const now = this.audioContext.currentTime;
     const safeMultiplier = Number(speedMultiplier) || 1;
     const effectiveSpeed = Math.max(0.1, safeMultiplier);
-
-    // If startAt is provided, it's an absolute scheduler time (seconds returned by getCurrentTime())
-    // Convert it to audioContext time: noteStartTime = now + (startAt - this.getCurrentTime()) + note.delayFromStart
     const baseOffset = (typeof startAt === 'number') ? (startAt - this.getCurrentTime()) : 0;
 
-    // Play each note in the pattern
-    for (const note of pattern) {
-      const noteStartTime = now + baseOffset + (note.delayFromStart / effectiveSpeed);
-      const noteDuration = note.duration / effectiveSpeed;
-      this.playNote(note.frequency, noteDuration, noteStartTime);
+    for (const delay of delays) {
+      const noteStartTime = now + baseOffset + (delay / effectiveSpeed);
+      this.playNote(440, 0.08 / effectiveSpeed, noteStartTime);
     }
   }
 
@@ -129,13 +86,13 @@ export class AudioSchedulerPM {
   }
 
   getBeatPattern(tileNumber) {
-    return this.beatPatterns[tileNumber]?.map(note => note.delayFromStart) || [];
+    return this.beatPatterns[tileNumber] ? this.beatPatterns[tileNumber].slice() : [];
   }
 
   getBeatPatternMs(tileNumber, speedMultiplier = 1) {
     const safeMultiplier = Number(speedMultiplier) || 1;
     const effectiveSpeed = Math.max(0.1, safeMultiplier);
-    return (this.beatPatterns[tileNumber] || []).map((note) => Math.round((note.delayFromStart / effectiveSpeed) * 1000));
+    return (this.beatPatterns[tileNumber] || []).map((delay) => Math.round((delay / effectiveSpeed) * 1000));
   }
 
   // Set a custom beat pattern for a tile

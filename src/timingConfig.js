@@ -8,6 +8,11 @@ export const PATTERN_MEMORY_TIMING_THRESHOLDS = {
 };
 
 export const PATTERN_MEMORY_BEAT_TIMING_OVERRIDES = {
+  3: [
+    { perfect: 0.6, good: 0.16 },
+    { perfect: 0.14, good: 0.22 },
+    { perfect: 0.16, good: 0.24 }
+  ],
   noob: [
     { perfect: 0.12, good: 0.2 },
     { perfect: 0.14, good: 0.22 },
