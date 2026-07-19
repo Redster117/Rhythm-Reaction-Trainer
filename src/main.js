@@ -200,7 +200,7 @@ function updateProfileInfo() {
 
 const MODE_DESCRIPTIONS = {
   beat: 'Beat-click mode tests your timing. Click when the cue hits the center target circle.',
-  key: 'Key-press mode trains reflexes with falling notes and customizable keybinds.',
+  key: 'Key-press mode trains reflexes with falling notes. Match the rhythm by pressing the displayed key when the notes reach the bottom line.',
   pattern: 'Pattern memory mode shows a sequence of colors or tiles, then asks you to reproduce it.'
 };
 
@@ -289,6 +289,13 @@ function startBackgroundMusic() {
     osc.stop(now + noteLength);
     bgMusicLoopNodes.push(osc);
     bgMusicLoopNodes.push(gainNode);
+    osc.addEventListener('ended', () => {
+      osc.disconnect();
+      gainNode.disconnect();
+      bgMusicLoopNodes = bgMusicLoopNodes.filter(
+        node => node !== osc && node !== gainNode
+      );
+    }, { once: true });
     index += 1;
     bgMusicLoopTimer = setTimeout(scheduleNextNote, intervalMs);
   };

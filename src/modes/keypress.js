@@ -295,12 +295,6 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     ctx.fillRect(0, 0, w, h);
     const now = safeNow();
 
-    ctx.fillStyle = '#e6eef6';
-    ctx.font = '18px system-ui';
-    ctx.fillText('Key Press Trainer', 105, 24);
-    ctx.font = '14px system-ui';
-    ctx.fillText('Match the rhythm by pressing the displayed key when the notes reach the lane.', 205, 46);
-
     ctx.strokeStyle = 'rgba(255,255,255,0.22)';
     ctx.lineWidth = 1;
     for (let i = 0; i < 4; i++) {

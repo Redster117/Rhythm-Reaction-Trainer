@@ -13,7 +13,9 @@ assert.equal(lateMiss.label, 'Miss');
 
 const passiveQueue = createBeatQueue([0.8, 1.5, 1.6]);
 const passiveResult = advanceBeatQueueForTime(passiveQueue, 0, 1.651);
-assert.equal(passiveResult.missedBeat?.judgement, 'Miss');
+assert.equal(passiveResult.missedBeats.length, 2);
+assert.equal(passiveResult.missedBeats[0].judgement, 'Miss');
+assert.equal(passiveResult.missedBeats[1].judgement, 'Miss');
 assert.equal(passiveResult.currentIndex, 2);
 
 const summary = summarizeBeatResults([

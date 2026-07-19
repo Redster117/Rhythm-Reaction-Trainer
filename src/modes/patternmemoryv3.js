@@ -706,5 +706,5 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     return scheduledMs;
   }
 
-  return { start, stop, getState, devForceTile, devInjectJudgementFunc, devAutoClickFunc, devAddScoreFunc, reset, setGuideOptions, setRollingOffset, getGuideOptions, getRollingOffset, getScheduledGuideTimings, setPlaybackSpeed, getPlaybackSpeed };
+  return { start, stop, getState, handleSpaceInput, devForceTile, devInjectJudgementFunc, devAutoClickFunc, devAddScoreFunc, reset, setGuideOptions, setRollingOffset, getGuideOptions, getRollingOffset, getScheduledGuideTimings, setPlaybackSpeed, getPlaybackSpeed };
 }

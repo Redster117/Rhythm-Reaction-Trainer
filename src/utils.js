@@ -56,25 +56,25 @@ export function judgeBeatInput(beat, inputTimeSeconds) {
 
 export function advanceBeatQueueForTime(beatQueue = [], currentIndex = 0, clockTimeSeconds = 0) {
   if (!Array.isArray(beatQueue) || beatQueue.length === 0) {
-    return { currentIndex, missedBeat: null };
+    return { currentIndex, missedBeats: [] };
   }
 
   let index = currentIndex;
-  let missedBeat = null;
+  const missedBeats = [];
 
   while (index < beatQueue.length) {
     const beat = beatQueue[index];
     if (!beat || beat.status !== 'pending') {
       index += 1;
       continue;
-    }
+   }
 
     const offsetMs = (clockTimeSeconds - beat.targetTime) * 1000;
     if (offsetMs > 150) {
       beat.status = 'judged';
       beat.judgement = 'Miss';
       beat.offsetMs = offsetMs;
-      missedBeat = beat;
+      missedBeats.push(beat);
       index += 1;
       continue;
     }
@@ -82,7 +82,7 @@ export function advanceBeatQueueForTime(beatQueue = [], currentIndex = 0, clockT
     break;
   }
 
-  return { currentIndex: index, missedBeat };
+  return { currentIndex: index, missedBeats };
 }
 
 export function summarizeBeatResults(results = []) {

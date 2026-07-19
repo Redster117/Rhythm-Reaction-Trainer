@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { getPatternMemoryComboDelta } from '../src/modes/patternmemory.js';
+import { getPatternMemoryComboDelta } from '../src/modes/patternmemoryv3.js';
 
 assert.equal(getPatternMemoryComboDelta('noob', 'Perfect'), 2, 'Noob perfects should give a slightly larger combo increment');
 assert.equal(getPatternMemoryComboDelta('noob', 'Good'), 1, 'Noob goods should still grow the combo a bit');
