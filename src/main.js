@@ -485,6 +485,7 @@ function getModeHighScores() {
     }
     result[mode] = max;
   }
+  return result;
 }
 
 function showDetailedStats() {
