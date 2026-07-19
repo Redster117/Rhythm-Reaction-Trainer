@@ -23,7 +23,7 @@ const ctx = {
 };
 
 const guide = new PatternGuide(ctx, canvas);
-assert.equal(guide.opts.hitboxLayers?.miss, true, 'Miss hitbox should be enabled by default');
-assert.equal(guide.opts.hitboxLayers?.good, true, 'Good hitbox should be enabled by default');
-assert.equal(guide.opts.hitboxLayers?.perfect, true, 'Perfect hitbox should be enabled by default');
-console.log('PASS default hitbox layers are enabled.');
+assert.equal(guide.opts.hitboxLayers?.miss, false, 'Miss hitbox should be disabled by default in the simple guide');
+assert.equal(guide.opts.hitboxLayers?.good, true, 'Good hitbox should be enabled by default in the simple guide');
+assert.equal(guide.opts.hitboxLayers?.perfect, true, 'Perfect hitbox should be enabled by default in the simple guide');
+console.log('PASS simple guide shows perfect and good hitboxes by default.');

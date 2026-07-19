@@ -36,10 +36,15 @@ export class DeveloperControls {
       { key: 'demo old sound.mp3', label: 'demo old sound.mp3', src: 'docs/demo old sound.mp3', type: 'audio' },
       { key: 'spinning heavy audio.mp3', label: 'spinning heavy audio.mp3', src: 'docs/spinning heavy audio.mp3', type: 'audio' }
     ];
-    this.isActive = localStorage.getItem('rtr-dev-console-open') === '1';
-    this.forceMode = localStorage.getItem('rtr-dev-force-mode') || null;
-    this.afkTimer = null;
-    this.afkMode = localStorage.getItem('rtr-dev-afk-mode') === '1';
+    // Do not persist dev console open state across page reloads.
+    // The panel should always start closed after a refresh.
+    this.isActive = false;
+    this.statsOverrideOpen = false;
+    this.scoreMultiplierEnabled = false;
+    this.scoreMultiplier = 1;
+    this.statsEditEnabled = false;
+    this.statsOverrideSnapshot = null;
+    this.statsAccessors = {};
     this.patternMemorySpeed = Number(localStorage.getItem('rtr-dev-pattern-memory-speed') || '1');
     this.autoClickerEnabled = localStorage.getItem('rtr-dev-auto-clicker-enabled') === '1';
     this.autoClickerTarget = String(localStorage.getItem('rtr-dev-auto-clicker-target') || 'good').toLowerCase();
@@ -116,13 +121,17 @@ export class DeveloperControls {
       </div>
       <div style="margin-bottom:12px">
         <label style="display:block;margin-bottom:4px">Quick Actions:</label>
-        <label style="display:block;margin-bottom:4px;font-size:11px;"><input type="checkbox" id="dev-force-enabled" checked> Enable force actions</label>
-        <label style="display:block;margin-bottom:4px;font-size:11px;"><input type="checkbox" id="dev-afk-mode"> AFK Force Mode</label>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" class="dev-action-toggle" id="dev-enable-force-perfect" checked><button id="dev-force-perfect" style="flex:1;padding:6px;background:#00ff00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Perfect</button></div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" class="dev-action-toggle" id="dev-enable-force-good" checked><button id="dev-force-good" style="flex:1;padding:6px;background:#00cc00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Good</button></div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" class="dev-action-toggle" id="dev-enable-force-miss" checked><button id="dev-force-miss" style="flex:1;padding:6px;background:#ff4444;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Force Miss</button></div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" class="dev-action-toggle" id="dev-enable-auto-clicker"${autoClickerChecked}><label style="font-size:11px;min-width:84px;">Auto Clicker</label><select id="dev-auto-clicker-target" style="flex:1;padding:6px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;font-size:11px;"><option value="good"${autoClickerTargetValue === 'good' ? ' selected' : ''}>Good</option><option value="perfect"${autoClickerTargetValue === 'perfect' ? ' selected' : ''}>Perfect</option></select></div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><input type="checkbox" class="dev-action-toggle" id="dev-enable-add-score" checked><button id="dev-add-score" style="flex:1;padding:6px;background:#00ffff;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Inject Score</button></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;"><label style="font-size:11px;min-width:84px;">Auto Clicker</label><input type="checkbox" id="dev-enable-auto-clicker"${autoClickerChecked}><select id="dev-auto-clicker-target" style="flex:1;padding:6px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;font-size:11px;"><option value="good"${autoClickerTargetValue === 'good' ? ' selected' : ''}>Good</option><option value="perfect"${autoClickerTargetValue === 'perfect' ? ' selected' : ''}>Perfect</option></select></div>
+        <div id="dev-stats-override-panel" style="margin-top:8px;padding:8px;border:1px solid #333;border-radius:6px;background:#0b1a2d;">
+          <button id="dev-open-stats-override" style="width:100%;padding:6px;background:#7c3aed;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Stats Override</button>
+          <div id="dev-stats-override-controls" style="display:none;margin-top:8px;">
+            <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px;"><input type="checkbox" id="dev-score-multiplier-enabled"> Enable Score Multiplier</label>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><label style="font-size:11px;min-width:84px;">Multiplier</label><input id="dev-score-multiplier" type="number" min="1" step="0.1" value="1" style="flex:1;padding:6px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;font-size:11px;" /></div>
+            <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:11px;"><input type="checkbox" id="dev-stats-edit-enabled"> Enable Stats Editing</label>
+            <p style="margin:0;font-size:10px;color:#aaa;">When enabled, double-click any summary or detailed stat entry to edit plays, accuracy, best precision, or best combo.</p>
+            <button id="dev-revert-stats" style="width:100%;padding:6px;background:#dc2626;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;margin-top:8px;display:none;">Revert Stats</button>
+          </div>
+        </div>
       </div>
       <div style="margin-bottom:12px">
         <label style="display:block;margin-bottom:4px">Tile Previews:</label>
@@ -137,8 +146,6 @@ export class DeveloperControls {
       <div style="margin-bottom:12px">
         <label style="display:block;margin-bottom:4px">Game Controls:</label>
         <button id="dev-reset-game" style="width:100%;padding:6px;margin-bottom:4px;background:#ffaa00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Refresh Page</button>
-        <label style="display:block;margin-bottom:4px;font-size:11px;">Score injection amount:</label>
-        <input id="dev-score-amount" type="number" min="0" step="100" value="1000" style="width:100%;padding:6px;margin-bottom:4px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;box-sizing:border-box;" />
       </div>
       <div style="border-top:1px solid #333;padding-top:8px;"><p id="dev-activation-sequence" style="margin:0;color:#aa0000;font-size:10px;">Sequence: ${this.formatActivationSequence()} to activate</p></div>
     `;
@@ -201,76 +208,51 @@ export class DeveloperControls {
     });
 
     // Quick action buttons
-    const forceEnabledCheckbox = document.getElementById('dev-force-enabled');
-    const updateForceButtons = () => {
-      const masterEnabled = forceEnabledCheckbox?.checked !== false;
-      const actionButtons = [
-        { buttonId: 'dev-force-perfect', toggleId: 'dev-enable-force-perfect' },
-        { buttonId: 'dev-force-good', toggleId: 'dev-enable-force-good' },
-        { buttonId: 'dev-force-miss', toggleId: 'dev-enable-force-miss' },
-        { buttonId: 'dev-add-score', toggleId: 'dev-enable-add-score' }
-      ];
-      actionButtons.forEach(({ buttonId, toggleId }) => {
-        const button = document.getElementById(buttonId);
-        const toggle = document.getElementById(toggleId);
-        if (button) {
-          button.disabled = !masterEnabled || !toggle?.checked;
-        }
-      });
-      const autoToggle = document.getElementById('dev-enable-auto-clicker');
-      const autoTarget = document.getElementById('dev-auto-clicker-target');
+    const autoToggle = document.getElementById('dev-enable-auto-clicker');
+    const autoTarget = document.getElementById('dev-auto-clicker-target');
+    const updateAutoClickerState = () => {
       if (autoTarget) {
-        autoTarget.disabled = !masterEnabled || !autoToggle?.checked;
+        autoTarget.disabled = !autoToggle?.checked;
       }
-      document.querySelectorAll('.dev-tile-btn').forEach((btn) => btn.disabled = !masterEnabled);
     };
-    forceEnabledCheckbox?.addEventListener('change', updateForceButtons);
-    document.querySelectorAll('.dev-action-toggle').forEach((toggle) => {
-      toggle.addEventListener('change', updateForceButtons);
+    autoToggle?.addEventListener('change', (e) => {
+      this.setAutoClickerEnabled(Boolean(e.target.checked));
+      updateAutoClickerState();
     });
-    this.updateActionButtonStates = updateForceButtons;
-    updateForceButtons(); // Initial state
-
-    const wireForceToggle = (toggleId, judgement) => {
-      document.getElementById(toggleId)?.addEventListener('change', (e) => {
-        const masterEnabled = document.getElementById('dev-force-enabled')?.checked !== false;
-        if (!masterEnabled) {
-          e.target.checked = false;
-          return;
-        }
-        if (e.target.checked) {
-          this.forceMode = judgement;
-          localStorage.setItem('rtr-dev-force-mode', judgement);
-          this.updateForceButtonStyles();
-          this.forceJudgement(judgement);
-          return;
-        }
-        if (this.forceMode === judgement) {
-          this.forceMode = null;
-          localStorage.removeItem('rtr-dev-force-mode');
-          this.updateForceButtonStyles();
-        }
-      });
-    };
-    wireForceToggle('dev-enable-force-perfect', 'Perfect');
-    wireForceToggle('dev-enable-force-good', 'Good');
-    wireForceToggle('dev-enable-force-miss', 'Miss');
-    document.getElementById('dev-force-perfect')?.addEventListener('click', () => this.forceJudgement('Perfect'));
-    document.getElementById('dev-force-good')?.addEventListener('click', () => this.forceJudgement('Good'));
-    document.getElementById('dev-force-miss')?.addEventListener('click', () => this.forceJudgement('Miss'));
-    document.getElementById('dev-reset-game')?.addEventListener('click', () => {
-      localStorage.setItem('rtr-dev-console-open', '1');
-      window.location.reload();
-    });
-    document.getElementById('dev-afk-mode')?.addEventListener('change', (e) => this.setAFKMode(Boolean(e.target.checked)));
-    document.getElementById('dev-enable-auto-clicker')?.addEventListener('change', (e) => this.setAutoClickerEnabled(Boolean(e.target.checked)));
     document.getElementById('dev-auto-clicker-target')?.addEventListener('change', (e) => this.setAutoClickerTarget(e.target.value));
-    document.getElementById('dev-add-score')?.addEventListener('click', () => this.addScore(this.getInjectionAmount()));
-    document.getElementById('dev-score-amount')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        this.addScore(this.getInjectionAmount());
+
+    document.getElementById('dev-open-stats-override')?.addEventListener('click', () => {
+      this.statsOverrideOpen = !this.statsOverrideOpen;
+      const panel = document.getElementById('dev-stats-override-controls');
+      if (panel) {
+        panel.style.display = this.statsOverrideOpen ? 'block' : 'none';
       }
+      if (this.statsOverrideOpen && typeof this.statsOverrideOpenCallback === 'function') {
+        this.statsOverrideOpenCallback();
+      }
+    });
+    document.getElementById('dev-score-multiplier-enabled')?.addEventListener('change', (e) => {
+      this.scoreMultiplierEnabled = Boolean(e.target.checked);
+    });
+    document.getElementById('dev-score-multiplier')?.addEventListener('input', (e) => {
+      const value = Number(e.target.value);
+      this.scoreMultiplier = Number.isFinite(value) && value > 0 ? value : 1;
+      e.target.value = String(this.scoreMultiplier);
+    });
+    document.getElementById('dev-stats-edit-enabled')?.addEventListener('change', (e) => {
+      this.statsEditEnabled = Boolean(e.target.checked);
+      if (typeof this.statsEditChangeCallback === 'function') {
+        this.statsEditChangeCallback(this.statsEditEnabled);
+      }
+      this.updateRevertButtonState();
+    });
+    document.getElementById('dev-revert-stats')?.addEventListener('click', () => {
+      if (!this.statsOverrideSnapshot) return;
+      this.restoreStatsOverrideSnapshot();
+      this.updateRevertButtonState();
+    });
+    document.getElementById('dev-reset-game')?.addEventListener('click', () => {
+      window.location.reload();
     });
   }
 
@@ -311,12 +293,6 @@ export class DeveloperControls {
     return this.patternConfig.slice(); // Return a copy
   }
 
-  getInjectionAmount() {
-    const input = document.getElementById('dev-score-amount');
-    const parsed = Number.parseInt(input?.value ?? '1000', 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1000;
-  }
-
   formatActivationSequence() {
     return this.activationSequence.map((code) => this.displayActivationKey(code)).join(' ');
   }
@@ -344,86 +320,72 @@ export class DeveloperControls {
     this.isActive = !this.isActive;
     if (this.panel) {
       this.panel.style.display = this.isActive ? 'block' : 'none';
-      this.updateForceButtonStyles();
-      localStorage.setItem('rtr-dev-console-open', this.isActive ? '1' : '0');
+      this.updateActionButtonStates();
+      // Do not persist open state to localStorage so a refresh always starts closed.
       if (this.isActive) {
         console.log('%c🔧 DEV PANEL ACTIVE', 'color: #ff0000; font-size: 14px; font-weight: bold;');
       }
     }
   }
 
-  forceJudgement(judgement) {
-    const normalizedJudgement = ['Perfect', 'Good', 'Miss'].includes(judgement) ? judgement : 'Good';
-    const toggleId = `dev-enable-force-${normalizedJudgement.toLowerCase()}`;
-    const toggle = document.getElementById(toggleId);
-    const enabled = document.getElementById('dev-force-enabled')?.checked !== false && Boolean(toggle?.checked);
-    if (!enabled) return;
-    if (!this.gameInstance) {
-      console.log('%c❌ No game instance', 'color: #ff4444; font-size: 12px;');
-      return;
-    }
-
-    this.forceMode = normalizedJudgement;
-    localStorage.setItem('rtr-dev-force-mode', normalizedJudgement);
-    this.updateForceButtonStyles();
-
-    if (typeof this.gameInstance.devInjectJudgementFunc === 'function') {
-      this.gameInstance.devInjectJudgementFunc(normalizedJudgement, { persistent: true });
-    }
-
-    console.log(`%c💫 Forced ${normalizedJudgement}`, 'color: #ffff00; font-size: 12px;');
-  }
-
-  updateForceButtonStyles() {
-    const modes = ['Perfect', 'Good', 'Miss'];
-    modes.forEach((mode) => {
-      const button = document.getElementById(`dev-force-${mode.toLowerCase()}`);
-      if (!button) return;
-      const active = this.forceMode === mode;
-      button.style.outline = active ? '2px solid #fff' : 'none';
-      button.style.boxShadow = active ? '0 0 0 2px rgba(255,255,255,0.25)' : 'none';
-    });
-  }
-
   updateActionButtonStates() {
-    const forceEnabledCheckbox = document.getElementById('dev-force-enabled');
-    const masterEnabled = forceEnabledCheckbox?.checked !== false;
-    const actionButtons = [
-      { buttonId: 'dev-force-perfect', toggleId: 'dev-enable-force-perfect' },
-      { buttonId: 'dev-force-good', toggleId: 'dev-enable-force-good' },
-      { buttonId: 'dev-force-miss', toggleId: 'dev-enable-force-miss' },
-      { buttonId: 'dev-add-score', toggleId: 'dev-enable-add-score' }
-    ];
-    actionButtons.forEach(({ buttonId, toggleId }) => {
-      const button = document.getElementById(buttonId);
-      const toggle = document.getElementById(toggleId);
-      if (button) {
-        button.disabled = !masterEnabled || !toggle?.checked;
-      }
-    });
     const autoToggle = document.getElementById('dev-enable-auto-clicker');
     const autoTarget = document.getElementById('dev-auto-clicker-target');
     if (autoTarget) {
-      autoTarget.disabled = !masterEnabled || !autoToggle?.checked;
+      autoTarget.disabled = !autoToggle?.checked;
+    }
+    this.updateRevertButtonState();
+  }
+
+  setStatsEditChangeCallback(callback) {
+    this.statsEditChangeCallback = typeof callback === 'function' ? callback : null;
+  }
+
+  setStatsOverrideOpenCallback(callback) {
+    this.statsOverrideOpenCallback = typeof callback === 'function' ? callback : null;
+  }
+
+  updateRevertButtonState() {
+    const button = document.getElementById('dev-revert-stats');
+    if (!button) return;
+    if (this.statsOverrideSnapshot) {
+      button.style.display = 'block';
+    } else {
+      button.style.display = 'none';
     }
   }
 
-  setAFKMode(enabled) {
-    this.afkMode = Boolean(enabled);
-    localStorage.setItem('rtr-dev-afk-mode', this.afkMode ? '1' : '0');
-    if (this.afkTimer) {
-      clearInterval(this.afkTimer);
-      this.afkTimer = null;
+  restoreStatsOverrideSnapshot() {
+    if (!this.statsOverrideSnapshot) return;
+    if (typeof this.statsOverrideRestoreCallback === 'function') {
+      this.statsOverrideRestoreCallback(this.statsOverrideSnapshot);
     }
-    if (!this.afkMode) return;
-    if (!this.gameInstance || typeof this.gameInstance.devInjectJudgementFunc !== 'function') return;
+  }
 
-    this.afkTimer = setInterval(() => {
-      if (!this.gameInstance || typeof this.gameInstance.devInjectJudgementFunc !== 'function') return;
-      const options = this.forceMode ? [this.forceMode] : ['Perfect', 'Good', 'Miss'];
-      const next = options[Math.floor(Math.random() * options.length)];
-      this.gameInstance.devInjectJudgementFunc(next, { persistent: true });
-    }, 600);
+  setStatsOverrideRestoreCallback(callback) {
+    this.statsOverrideRestoreCallback = typeof callback === 'function' ? callback : null;
+  }
+
+  createStatsOverrideSnapshot(snapshot) {
+    this.statsOverrideSnapshot = snapshot ? JSON.parse(JSON.stringify(snapshot)) : null;
+    this.updateRevertButtonState();
+  }
+
+  clearStatsOverrideSnapshot() {
+    this.statsOverrideSnapshot = null;
+    this.updateRevertButtonState();
+  }
+
+  isScoreMultiplierEnabled() {
+    return Boolean(this.scoreMultiplierEnabled);
+  }
+
+  getScoreMultiplier() {
+    return Number.isFinite(this.scoreMultiplier) && this.scoreMultiplier > 0 ? this.scoreMultiplier : 1;
+  }
+
+  isStatsEditEnabled() {
+    return Boolean(this.statsEditEnabled);
   }
 
   resetGame() {
@@ -432,18 +394,6 @@ export class DeveloperControls {
       console.log('%c🔄 Game reset', 'color: #00ff00; font-size: 12px;');
     } else {
       console.log('%c❌ Cannot reset game', 'color: #ff4444; font-size: 12px;');
-    }
-  }
-
-  addScore(amount) {
-    const enabled = document.getElementById('dev-enable-add-score')?.checked;
-    if (!enabled) return;
-    const safeAmount = Number.isFinite(Number(amount)) ? Math.max(0, Number(amount)) : 1000;
-    if (this.gameInstance && typeof this.gameInstance.devAddScoreFunc === 'function') {
-      this.gameInstance.devAddScoreFunc(safeAmount);
-      console.log(`%c➕ Added ${safeAmount} score`, 'color: #00ff00; font-size: 12px;');
-    } else {
-      console.log('%c❌ Cannot add score', 'color: #ff4444; font-size: 12px;');
     }
   }
 
@@ -548,15 +498,8 @@ export class DeveloperControls {
 
   setGameInstance(instance) {
     this.gameInstance = instance;
-    this.updateForceButtonStyles();
     this.updateActionButtonStates?.();
 
-    if (instance && this.forceMode) {
-      this.gameInstance.devInjectJudgementFunc?.(this.forceMode, { persistent: true });
-    }
-    if (instance && this.afkMode) {
-      this.setAFKMode(true);
-    }
     if (instance && typeof instance.setPlaybackSpeed === 'function') {
       instance.setPlaybackSpeed(this.patternMemorySpeed);
     }

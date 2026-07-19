@@ -95,6 +95,26 @@ export function summarizeBeatResults(results = []) {
   }, { perfects: 0, goods: 0, misses: 0 });
 }
 
+export function summarizePatternMemoryRoundJudgement(judgements = []) {
+  if (!Array.isArray(judgements) || judgements.length === 0) {
+    return 'Miss';
+  }
+
+  if (judgements.some((entry) => entry === 'Miss')) {
+    return 'Miss';
+  }
+
+  if (judgements.every((entry) => entry === 'Perfect')) {
+    return 'Perfect';
+  }
+
+  if (judgements.some((entry) => entry === 'Perfect' || entry === 'Good')) {
+    return 'Good';
+  }
+
+  return 'Miss';
+}
+
 export function scoreRhythmPattern(expectedTimes = [], actualTimes = []) {
   if (!expectedTimes.length || !actualTimes.length) {
     return { averageErrorMs: Infinity, maxErrorMs: Infinity, sampleCount: 0 };
@@ -128,22 +148,17 @@ export function buildReactionBeatTargets(officialBeatTimes = [], priorPressTimes
     return [];
   }
 
-  const targets = officialBeatTimes.slice();
-  const priorPresses = Array.isArray(priorPressTimes) ? priorPressTimes : [];
-  targets[0] = officialBeatTimes[0];
+  return officialBeatTimes.slice();
+}
 
-  for (let index = 1; index < targets.length; index += 1) {
-    const previousPress = priorPresses[index - 1];
-    const previousTarget = targets[index - 1];
-    const officialInterval = officialBeatTimes[index] - officialBeatTimes[index - 1];
-    if (typeof previousPress === 'number') {
-      targets[index] = previousPress + officialInterval;
-    } else if (typeof previousTarget === 'number') {
-      targets[index] = previousTarget + officialInterval;
-    }
-  }
-
-  return targets;
+export function getAdaptiveBeatTargetTimeSeconds({
+  beatIndex = 0,
+  officialBeatTimeSeconds,
+  previousPressTimeSeconds = null,
+  previousOfficialBeatTimeSeconds = null,
+  previousTargetTimeSeconds = null
+}) {
+  return officialBeatTimeSeconds;
 }
 
 export function judgeTimedReactionBeat({
@@ -152,43 +167,47 @@ export function judgeTimedReactionBeat({
   officialBeatTimeSeconds,
   previousPressTimeSeconds = null,
   previousOfficialBeatTimeSeconds = null,
-  perfectWindowMs = 50,
-  goodWindowMs = 100,
-  forcePerfect = false
+  perfectWindowMs = 25,
+  goodWindowMs = 50,
+  forcePerfect = false,
+  targetTimeSeconds = null
 } = {}) {
   if (typeof pressTimeSeconds !== 'number') {
     return 'Miss';
   }
-
-  const targetTimeSeconds = beatIndex === 0
-    ? officialBeatTimeSeconds
-    : (() => {
-        if (typeof previousPressTimeSeconds === 'number' && typeof previousOfficialBeatTimeSeconds === 'number') {
-          return previousPressTimeSeconds + (officialBeatTimeSeconds - previousOfficialBeatTimeSeconds);
-        }
-        return officialBeatTimeSeconds;
-      })();
+  const resolvedTargetTimeSeconds = typeof targetTimeSeconds === 'number'
+    ? targetTimeSeconds
+    : officialBeatTimeSeconds;
 
   if (forcePerfect) {
     return 'Perfect';
   }
 
-  const diffMs = (pressTimeSeconds - targetTimeSeconds) * 1000;
-  const absDiffMs = Math.abs(diffMs);
-
-  if (absDiffMs <= perfectWindowMs) {
+  // First beat is always treated as perfect (start anchor)
+  if (beatIndex === 0) {
     return 'Perfect';
   }
 
-  if (beatIndex === 0) {
-    if (absDiffMs <= Math.max(goodWindowMs, 150)) {
-      return 'Good';
-    }
-    return 'Good';
+  // If we have a previous press time and previous official beat time available,
+  // judge based on the interval between presses (mimicry) rather than absolute
+  // alignment to the official timeline. This lets the player reproduce the
+  // pattern spacing relative to their own first press.
+  if (typeof previousPressTimeSeconds === 'number' && typeof previousOfficialBeatTimeSeconds === 'number') {
+    const officialInterval = officialBeatTimeSeconds - previousOfficialBeatTimeSeconds;
+    const actualInterval = pressTimeSeconds - previousPressTimeSeconds;
+    const diffMs = (actualInterval - officialInterval) * 1000;
+    const absDiffMs = Math.abs(diffMs);
+
+    if (absDiffMs <= perfectWindowMs) return 'Perfect';
+    if (absDiffMs <= goodWindowMs) return 'Good';
+    return 'Miss';
   }
 
-  if (absDiffMs <= goodWindowMs) {
-    return 'Good';
-  }
+  // Fallback: absolute time comparison when interval-based judgement can't be used
+  const diffMs = (pressTimeSeconds - resolvedTargetTimeSeconds) * 1000;
+  const absDiffMs = Math.abs(diffMs);
+
+  if (absDiffMs <= perfectWindowMs) return 'Perfect';
+  if (absDiffMs <= goodWindowMs) return 'Good';
   return 'Miss';
 }
