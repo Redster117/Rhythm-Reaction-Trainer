@@ -45,11 +45,22 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
   });
 
   let gifBackground = null;
+  let gifBackgroundElement = null;
+  let gifEnded = false;
+  let awaitingGifEnd = false;
   let keyHandler = null;
   let pointerHandler = null;
+  let audioSchedulerWasSoundEnabled = null;
 
   function safeNow() {
-    return audioScheduler && typeof audioScheduler.getCurrentTime === 'function' ? audioScheduler.getCurrentTime() : performance.now() / 1000;
+    if (audioScheduler && typeof audioScheduler.getCurrentTime === 'function') {
+      const currentTime = audioScheduler.getCurrentTime();
+      if (audioScheduler.audioCtx && audioScheduler.audioCtx.state === 'suspended') {
+        return performance.now() / 1000;
+      }
+      return currentTime;
+    }
+    return performance.now() / 1000;
   }
 
   function getDisplayKey(code) {
@@ -77,17 +88,28 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     const spb = audioScheduler && typeof audioScheduler.secondsPerBeat === 'number'
       ? audioScheduler.secondsPerBeat
       : (audioScheduler && typeof audioScheduler.interval === 'number' ? audioScheduler.interval : 0.5);
+    const baseCueSpacing = typeof difficulty.cueSpacing === 'number' ? difficulty.cueSpacing : spb;
     
     // If custom pattern is provided (easter egg), use it instead
     if (customPattern && Array.isArray(customPattern) && customPattern.length > 0) {
-      return customPattern.map((keyLabels, index) => {
-        const beatTime = startTime + index * spb;
-        const keysArray = Array.isArray(keyLabels) ? keyLabels : [keyLabels];
+      let currentBeat = startTime;
+      return customPattern.map((entry) => {
+        const keysArray = Array.isArray(entry)
+          ? entry
+          : Array.isArray(entry.keys)
+            ? entry.keys
+            : [entry.keys];
+        const delay = isEasterEgg && typeof entry.delay === 'number' ? entry.delay : 0;
+        const beatTime = currentBeat + delay;
+        currentBeat = beatTime;
+        const label = keysArray[0];
+        const code = normalizedKeybinds[label] || `Key${label}`;
         return {
           beatTime,
-          label: keysArray[0],
-          code: normalizedKeybinds[keysArray[0]] || `Key${keysArray[0]}`,
+          label,
+          code,
           keysRequired: keysArray,
+          displayLabel: keysArray.join(''),
           spawnTime: beatTime - leadTime,
           hit: false
         };
@@ -97,7 +119,7 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     return Array.from({ length: count }, (_, index) => {
       const label = availableLabels[index % availableLabels.length];
       const code = normalizedKeybinds[label] || `Key${label}`;
-      const beatTime = startTime + index * spb;
+      const beatTime = startTime + index * baseCueSpacing;
       return { beatTime, label, code, keysRequired: [label], spawnTime: beatTime - leadTime, hit: false };
     });
   }
@@ -162,13 +184,18 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     }
 
     if (!nearest) {
+      const firstPending = cues.find((cue) => !cue.hit);
+      if (firstPending && eventTime < firstPending.spawnTime) {
+        // Ignore presses before the next cue is active.
+        return false;
+      }
       combo = 0;
       lastJudgement = 'Miss';
       totalJudgements += 1;
       totalOffset += maxWindow;
       updateHUD();
       endRunAfterMiss();
-      return;
+      return false;
     }
     
     // For simultaneous keys, check if all required keys are pressed
@@ -184,23 +211,23 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
       }
       
       // Check if all required keys are currently pressed
-      let allPressed = false;
-      for (const pressedCode of keysCurrentlyPressed) {
-        if (requiredCodes.has(pressedCode)) {
-          allPressed = true;
+      let allPressed = true;
+      for (const requiredCode of requiredCodes) {
+        if (!keysCurrentlyPressed.has(requiredCode)) {
+          allPressed = false;
           break;
         }
       }
       
       // If not all keys are pressed yet, don't register this as a hit
       if (!allPressed) {
-        return;
+        return false;
       }
     }
     
-    // Check if auto-clicker is detected and mute easter egg audio
+    // Check if auto-clicker is detected for debugging only; do not mute easter egg audio here.
     if (isEasterEgg && easterEggAudio && typeof window.isAutoClickerDetected !== 'undefined' && window.isAutoClickerDetected) {
-      easterEggAudio.volume = 0;
+      // no-op: keep easter egg audio playing even when auto-clicker is detected
     }
 
     const diffSigned = eventTime - nearest.beatTime;
@@ -244,7 +271,7 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
 
     if (lastJudgement === 'Miss') {
       endRunAfterMiss();
-      return;
+      return false;
     }
 
     if (pendingScoreAdd) {
@@ -253,6 +280,7 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     }
 
     updateHUD();
+    return true;
   }
 
   function handleKeyDown(e) {
@@ -301,9 +329,9 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
       totalOffset += maxWindow;
       updateHUD();
       endRunAfterMiss();
-      return;
+      return false;
     }
-    handleInput(nowPtr, nearest.code);
+    return handleInput(nowPtr, nearest.code);
   }
 
   function start() {
@@ -324,35 +352,103 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     countdownStartTime = showCountdown ? safeNow() : null;
     countdownEnded = !showCountdown;
 
-    // Load video/GIF if provided (easter egg)
+    // Load GIF/video if provided (easter egg)
     if (gifFile) {
-      gifBackground = new Image();
-      gifBackground.src = gifFile;
-      gifBackground.crossOrigin = 'anonymous';
+      const isVideo = typeof gifFile === 'string' && gifFile.match(/\.(mp4|webm|ogg)$/i);
+      if (isVideo) {
+        gifBackgroundElement = document.createElement('video');
+        gifBackgroundElement.muted = true;
+        // For easter egg runs we want the video to play through once and then end;
+        // otherwise keep looping for decorative gifs.
+        gifBackgroundElement.loop = !isEasterEgg;
+        gifBackgroundElement.autoplay = false;
+        gifBackgroundElement.playsInline = true;
+        gifBackgroundElement.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;visibility:hidden;';
+        gifBackgroundElement.crossOrigin = 'anonymous';
+        gifBackgroundElement.preload = 'auto';
+        gifBackgroundElement.src = gifFile;
+        gifBackgroundElement.addEventListener('canplay', () => {
+          // Keep the hidden video ready for drawImage once audio starts.
+        });
+        gifBackgroundElement.addEventListener('ended', () => {
+          gifEnded = true;
+          if (awaitingGifEnd) {
+            // finalize the run when video ends
+            gameEnded = true;
+            if (onGameEnd) {
+              setTimeout(() => onGameEnd(), 1000);
+            }
+            stop();
+          }
+        });
+        document.body.appendChild(gifBackgroundElement);
+        gifBackground = gifBackgroundElement;
+        gifBackgroundElement.load();
+      } else {
+        gifBackgroundElement = document.createElement('img');
+        gifBackgroundElement.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;visibility:hidden;';
+        gifBackgroundElement.src = gifFile;
+        document.body.appendChild(gifBackgroundElement);
+        gifBackground = gifBackgroundElement;
+      }
     }
 
     const now = safeNow();
-    const startAt = now + Math.max(leadTime, 0.35) + countdownTime;
+    const delayAfterCountdown = showCountdown ? 2.35 : 0.0; // only add extra startup buffer for easter egg video/audio runs
+    const startAt = now + Math.max(leadTime, 0) + countdownTime + delayAfterCountdown;
     const patternData = pattern
       ? pattern.map((offset, index) => {
           const label = availableLabels[index % availableLabels.length];
           const code = normalizedKeybinds[label] || `Key${label}`;
-          return { beatTime: startAt + offset, label, code, spawnTime: startAt + offset - leadTime, hit: false };
+          const adjustedBeatTime = startAt + (difficulty.timingOffset || 0) + offset;
+          return { beatTime: adjustedBeatTime, label, code, spawnTime: adjustedBeatTime - leadTime, hit: false };
         })
       : generatePattern(startAt, beatCount);
 
     spawnPattern(patternData);
 
-    // Load and play easter egg audio if provided, otherwise schedule normal beat sounds
+    // If this is an easter egg, disable scheduler sounds for the run so only the easter audio plays.
     if (isEasterEgg && audioFile) {
+      if (audioScheduler) {
+        audioSchedulerWasSoundEnabled = audioScheduler.soundEnabled;
+        audioScheduler.setSoundEnabled(false);
+        if (audioScheduler.audioCtx && audioScheduler.audioCtx.state === 'running') {
+          audioScheduler.audioCtx.suspend().catch(() => {});
+        }
+        if (typeof audioScheduler.stopScheduler === 'function') {
+          audioScheduler.stopScheduler();
+        }
+      }
+
       easterEggAudio = new Audio(audioFile);
+      easterEggAudio.preload = 'auto';
+      easterEggAudio.crossOrigin = 'anonymous';
       easterEggAudio.volume = 1;
-      // Delay audio start until after countdown
+      easterEggAudio.muted = true;
+      easterEggAudio.playsInline = true;
+      easterEggAudio.load();
+      easterEggAudio.play().catch(() => {
+        // This initial muted play helps unlock audio playback for later unmuted play.
+      });
+
+      // Delay full audio and video start until after countdown
       const audioPlayDelay = countdownTime * 1000;
       setTimeout(() => {
         if (easterEggAudio && !gameEnded) {
+          if (!easterEggAudio.paused) {
+            easterEggAudio.pause();
+          }
+          easterEggAudio.currentTime = 0;
+          easterEggAudio.muted = false;
           easterEggAudio.play().catch(() => {
             console.log('Failed to play easter egg audio:', audioFile);
+          });
+        }
+
+        if (gifBackgroundElement && gifBackgroundElement.tagName === 'VIDEO') {
+          gifBackgroundElement.currentTime = 0;
+          gifBackgroundElement.play().catch(() => {
+            // Play may be blocked until user interaction but should be unlocked by the initial audio gesture.
           });
         }
       }, audioPlayDelay);
@@ -401,6 +497,15 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
       easterEggAudio.currentTime = 0;
       easterEggAudio = null;
     }
+    if (gifBackgroundElement && gifBackgroundElement.parentNode) {
+      gifBackgroundElement.parentNode.removeChild(gifBackgroundElement);
+      gifBackgroundElement = null;
+      gifBackground = null;
+    }
+    if (audioScheduler && typeof audioScheduler.setSoundEnabled === 'function' && audioSchedulerWasSoundEnabled !== null) {
+      audioScheduler.setSoundEnabled(audioSchedulerWasSoundEnabled);
+      audioSchedulerWasSoundEnabled = null;
+    }
     keysCurrentlyPressed.clear();
   }
 
@@ -409,8 +514,8 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
     
-    // Draw GIF/image background if available (easter egg), otherwise black background
-    if (gifBackground && gifBackground.complete) {
+    // Draw GIF/video background if available (easter egg), otherwise black background
+    if (gifBackground && ((gifBackground.complete) || (gifBackground.readyState && gifBackground.readyState >= 2))) {
       ctx.drawImage(gifBackground, 0, 0, w, h);
     } else {
       ctx.fillStyle = '#0b0c0e';
@@ -485,29 +590,44 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
       }
 
       const progress = Math.min(Math.max(t, 0), 1);
-      const x = getLaneX(cue.label);
       const y = h * 0.1 + progress * (h * 0.8);
+      const requiredLabels = cue.keysRequired || [cue.label];
 
-      const keyColor = getKeyColor(cue.label);
-      ctx.beginPath();
-      ctx.arc(x, y, 28, 0, Math.PI * 2);
-      ctx.fillStyle = cue.hit ? keyColor.hit : keyColor.unhit;
-      ctx.fill();
-      ctx.strokeStyle = keyColor.stroke;
-      ctx.lineWidth = 3;
-      ctx.stroke();
+      requiredLabels.forEach((label) => {
+        const x = getLaneX(label);
+        const keyColor = getKeyColor(label);
+        ctx.beginPath();
+        ctx.arc(x, y, 28, 0, Math.PI * 2);
+        ctx.fillStyle = cue.hit ? keyColor.hit : keyColor.unhit;
+        ctx.fill();
+        ctx.strokeStyle = keyColor.stroke;
+        ctx.lineWidth = 3;
+        ctx.stroke();
 
-      ctx.fillStyle = '#071226';
-      ctx.font = '18px system-ui';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(getDisplayKey(cue.code), x, y);
+        ctx.fillStyle = '#071226';
+        ctx.font = '18px system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x, y);
+      });
     }
 
     if (cues.length === 0 && totalJudgements > 0 && !gameEnded) {
-      gameEnded = true;
-      if (onGameEnd) {
-        setTimeout(() => onGameEnd(), 1000);
+      // If an easter-egg video is playing, wait until the video ends before ending the run.
+      if (gifBackgroundElement && gifBackgroundElement.tagName === 'VIDEO' && !gifEnded) {
+        awaitingGifEnd = true;
+        // ensure video is playing
+        try {
+          if (gifBackgroundElement.paused) {
+            gifBackgroundElement.currentTime = 0;
+            gifBackgroundElement.play().catch(() => {});
+          }
+        } catch (e) {}
+      } else {
+        gameEnded = true;
+        if (onGameEnd) {
+          setTimeout(() => onGameEnd(), 1000);
+        }
       }
     }
 
@@ -550,24 +670,47 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     if (gameEnded) return false;
     const normalizedJudgement = ['Perfect', 'Good'].includes(judgement) ? judgement : 'Good';
     const timingInfo = getNextAutoClickTiming();
-    
+
     if (!timingInfo) {
       return false;
     }
-    
+
     if (!timingInfo.canClickNow) {
       return false;
     }
 
+    const previousForcedJudgement = forcedJudgement;
+    const previousForcedPersistent = forcedPersistent;
+    const previousKeys = new Set(keysCurrentlyPressed);
+
+    // For simultaneous cues, simulate all required keys being pressed.
+    const requiredLabels = timingInfo.cue.keysRequired || [timingInfo.cue.label];
+    requiredLabels.forEach((label) => {
+      const code = normalizedKeybinds[label] || `Key${label}`;
+      keysCurrentlyPressed.add(code);
+      if (/^[A-Z]$/.test(label)) {
+        keysCurrentlyPressed.add(`Key${label}`);
+      }
+    });
+
     forcedJudgement = normalizedJudgement;
     forcedPersistent = true;
-    handleInput(safeNow(), timingInfo.cue.code);
-    return true;
+
+    const success = handleInput(safeNow(), timingInfo.cue.code);
+
+    forcedJudgement = previousForcedJudgement;
+    forcedPersistent = previousForcedPersistent;
+    keysCurrentlyPressed.clear();
+    previousKeys.forEach((pressedKey) => keysCurrentlyPressed.add(pressedKey));
+
+    return Boolean(success);
   }
 
   function devAddScoreFunc(amount) {
-    score += amount;
-    updateHUD();
+    if (typeof amount === 'number') {
+      score += amount;
+      updateHUD();
+    }
   }
 
   function reset() {
@@ -595,6 +738,7 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     devAddScoreFunc,
     reset,
     setDebug: (v) => { debug = !!v; },
-    getNextAutoClickTiming
+    getNextAutoClickTiming,
+    isEasterEgg: isEasterEgg
   };
 }

@@ -105,11 +105,12 @@ let isAutoClickerDetected = false;
 const KEYPRESS_EASTER_EGGS = {
   pootis: {
     code: ['KeyP', 'KeyO', 'KeyO', 'KeyT', 'KeyI', 'KeyS'],
-    gif: 'docs/Caked up Heavy Beat.gif',
+    gif: 'docs/Caked up Heavy Beat.mp4',
     audioFile: 'docs/Caked up Heavy Beat.mp3',
     difficulty: 'pootis',
-    pattern: 'a,f,s,a,s,d,af,ds,af',
-    keyOrder: ['A', 'S', 'D', 'F']
+    pattern: 'a(0),f(0.42),s(0.44),a(0.48),s(2.8),d(0.42),a(0.44),fa(2.9),ds(0.42),as(0.44)',
+    keyOrder: ['A', 'S', 'D', 'F'],
+    cueSpacing: 0,
   },
   kazotsky: {
     code: ['KeyK', 'KeyA', 'KeyZ', 'KeyO', 'KeyT', 'KeyS', 'KeyK', 'KeyY'],
@@ -147,43 +148,43 @@ function setStoredKeypressEasterEggs(eggs) {
 
 let keypressEasterEggSequenceIndex = {};
 let unlockedKeypressEasterEggs = getStoredKeypressEasterEggs();
+let activeKeypressEasterEggs = {};
 
 // Initialize sequence trackers
 Object.keys(KEYPRESS_EASTER_EGGS).forEach(key => {
   keypressEasterEggSequenceIndex[key] = 0;
+  activeKeypressEasterEggs[key] = false;
 });
 
-// Easter egg pattern parser: converts "a,f,s,   a,s,d  af, ds, af" format
-// into proper cue patterns with simultaneous key support
-// Consecutive letters with no spaces = simultaneous keys (e.g., "af" means both A and F at the same time)
-// Commas and spaces = separators between cues
+// Easter egg pattern parser: converts patterns like
+//   a,f,s,   a,s,d  af, ds, af
+// into proper cue objects for keypress mode.
+//
+// Each cue may also include its own delay in seconds:
+//   a(0.2), a(0.4), a(0.1), f, s, d
+// This means repeated keys like a,a,a can each have their own spacing.
+// These delays are defined directly in the main easter egg pattern string,
+// not via dev console controls.
+//
+// Consecutive letters with no spaces = simultaneous keys
+//   af means both A and F at the same time.
+// Commas and spaces separate cues.
 function parseEasterEggPattern(patternStr = '') {
   if (!patternStr || typeof patternStr !== 'string') return [];
-  
+
   const result = [];
-  let currentCue = '';
-  
-  for (let i = 0; i < patternStr.length; i++) {
-    const char = patternStr[i];
-    
-    if (/[A-Fa-f]/.test(char)) {
-      // Accumulate letters for the current cue
-      currentCue += char.toUpperCase();
-    } else if (/[,\s]/.test(char)) {
-      // Separator found: if we have accumulated letters, save them as a cue
-      if (currentCue.length > 0) {
-        // Split multi-character cues into arrays of individual keys (for simultaneous presses)
-        result.push(currentCue.split(''));
-        currentCue = '';
-      }
-    }
-  }
-  
-  // Don't forget the last cue if pattern doesn't end with a separator
-  if (currentCue.length > 0) {
-    result.push(currentCue.split(''));
-  }
-  
+  const tokens = patternStr.split(/[\s,]+/).filter(Boolean);
+
+  tokens.forEach((token) => {
+    const match = token.match(/^([ASDFasdf]+)(?:\((\d*\.?\d+)\))?$/);
+    if (!match) return;
+
+    const keys = match[1].toUpperCase().split('');
+    const delay = match[2] ? parseFloat(match[2]) : undefined;
+
+    result.push({ keys, delay });
+  });
+
   return result;
 }
 
@@ -390,7 +391,7 @@ function updateDifficultyOptions() {
   // Add easter egg options if in keypress mode
   if (selectedMode === 'key') {
     Object.keys(KEYPRESS_EASTER_EGGS).forEach(eggKey => {
-      if (unlockedKeypressEasterEggs[eggKey]) {
+      if (activeKeypressEasterEggs[eggKey]) {
         availableOptions.push(KEYPRESS_EASTER_EGGS[eggKey].difficulty);
         // Preload GIFs for faster loading
         preloadEasterEggGif(KEYPRESS_EASTER_EGGS[eggKey].gif);
@@ -407,7 +408,7 @@ function updateDifficultyOptions() {
   // Add easter egg options to HTML
   if (selectedMode === 'key') {
     Object.keys(KEYPRESS_EASTER_EGGS).forEach(eggKey => {
-      if (unlockedKeypressEasterEggs[eggKey]) {
+      if (activeKeypressEasterEggs[eggKey]) {
         const eggDifficulty = KEYPRESS_EASTER_EGGS[eggKey].difficulty;
         const eggLabel = eggDifficulty.toUpperCase();
         optionsHtml += `<option value="${eggDifficulty}">${eggLabel}</option>`;
@@ -422,6 +423,7 @@ function updateDifficultyOptions() {
     difficultySelect.value = currentValue;
   } else {
     difficultySelect.value = 'noob';
+    difficultySelect.selectedIndex = 0;
   }
 }
 
@@ -905,6 +907,9 @@ function isDemoGifActivationSequence() {
 function showDemoGifIfUnlocked() {
   if (!demoGifUnlocked || !demoGif) return;
 
+  demoGif.hidden = false;
+  demoGif.style.display = '';
+
   // Create temporary overlay for Demoman.png
   const tempOverlay = document.createElement('div');
   tempOverlay.id = 'temp-demo-overlay';
@@ -986,6 +991,7 @@ function showDemoGifIfUnlocked() {
 
 function hideDemoGif() {
   if (!demoGif) return;
+  demoGif.hidden = true;
   demoGif.style.display = 'none';
 }
 
@@ -1333,6 +1339,35 @@ function detectAutoClicker(keyCode) {
   return isAutoClickerDetected;
 }
 
+function unlockPootisEasterEgg() {
+  const eggKey = 'pootis';
+  const egg = KEYPRESS_EASTER_EGGS[eggKey];
+  if (unlockedKeypressEasterEggs[egg.difficulty]) return;
+
+  keypressEasterEggSequenceIndex[eggKey] = 0;
+  unlockedKeypressEasterEggs[egg.difficulty] = true;
+  setStoredKeypressEasterEggs(unlockedKeypressEasterEggs);
+  activeKeypressEasterEggs[eggKey] = true;
+  difficultyPresets[egg.difficulty] = {
+    ...difficultyPresets.noob,
+    easterEgg: eggKey,
+    gifFile: egg.gif,
+    audioFile: egg.audioFile,
+    pattern: egg.pattern,
+    keyOrder: egg.keyOrder,
+    cueSpacing: egg.cueSpacing,
+    timingOffset: egg.timingOffset
+  };
+  updateDifficultyOptions();
+  // Ensure easter egg is usable immediately
+  demoGifUnlocked = true;
+  try { showDemoGifIfUnlocked(); } catch (e) {}
+  if (typeof difficultySelect !== 'undefined' && difficultySelect) {
+    difficultySelect.value = egg.difficulty;
+  }
+  showMessage('🎉 POOTIS easter egg unlocked!');
+}
+
 function handleKeypressEasterEggCode(keyCode) {
   // Only process if demoman easter egg is unlocked
   if (!demoGifUnlocked) return;
@@ -1351,6 +1386,7 @@ function handleKeypressEasterEggCode(keyCode) {
         keypressEasterEggSequenceIndex[eggKey] = 0;
         unlockedKeypressEasterEggs[eggKey] = true;
         setStoredKeypressEasterEggs(unlockedKeypressEasterEggs);
+        activeKeypressEasterEggs[eggKey] = true;
         
         // Add difficulty to presets
         difficultyPresets[egg.difficulty] = {
@@ -1359,7 +1395,9 @@ function handleKeypressEasterEggCode(keyCode) {
           gifFile: egg.gif,
           audioFile: egg.audioFile,
           pattern: egg.pattern,
-          keyOrder: egg.keyOrder
+          keyOrder: egg.keyOrder,
+          cueSpacing: egg.cueSpacing,
+          timingOffset: egg.timingOffset
         };
 
         updateDifficultyOptions();
@@ -1425,6 +1463,10 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     stopGame();
   }
+
+  // Check for the pootis konami shortcut first
+  // Debug log for konami sequence matching
+  // POOTIS konami removed
 
   // Check for keypress easter egg codes
   handleKeypressEasterEggCode(e.code);
@@ -1594,15 +1636,20 @@ startBtn.addEventListener('click', async () => {
   const difficultyWithLevel = { ...difficulty, level: difficultySelect.value };
 
   if (selectedMode !== 'pattern') {
-    audioScheduler = new AudioScheduler();
-    audioScheduler.setSoundEnabled(true); // Sound effects always enabled
-    if (selectedMode === 'key') {
-      audioScheduler.setSoundProfile('keypress');
+    const isKeyEasterEgg = selectedMode === 'key' && !!difficultyWithLevel.audioFile;
+    if (!isKeyEasterEgg) {
+      audioScheduler = new AudioScheduler();
+      audioScheduler.setSoundEnabled(true); // Sound effects always enabled
+      if (selectedMode === 'key') {
+        audioScheduler.setSoundProfile('keypress');
+      } else {
+        audioScheduler.setSoundProfile('default');
+      }
+      audioScheduler.setBPM(difficulty.bpm);
+      await audioScheduler.init();
     } else {
-      audioScheduler.setSoundProfile('default');
+      audioScheduler = null;
     }
-    audioScheduler.setBPM(difficulty.bpm);
-    await audioScheduler.init();
   } else {
     audioScheduler = null; // Pattern mode uses its own audio
   }
@@ -1734,6 +1781,10 @@ function initialiseUI() {
   updateHeaderControls();
   updateProfileInfo();
   updateModeDescription();
+  if (difficultySelect) {
+    difficultySelect.value = 'noob';
+    difficultySelect.selectedIndex = 0;
+  }
   updateRunControls();
   hideDemoGif();
   if (backgroundMusicEnabled) {
