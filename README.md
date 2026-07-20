@@ -15,3 +15,12 @@ You are gonna need to find the demo.gif under .gitignore and place it in the doc
 3. Once done you will get a notification saying "Your application running on port 8000 is available
 4. Select open in browser
 5. Type your username and press start
+
+
+
+
+References:
+- Caked up Heavy Beat: https://www.youtube.com/watch?v=e_660yeZtPk
+- Eat My Ass Heavy: https://www.youtube.com/watch?v=1HINN85kMTE
+- Heavy Beats: https://www.youtube.com/watch?v=-vUYYKQjTwU
+- Heavy Beats 2: https://www.youtube.com/watch?v=eJ9tHnr_Vvg
