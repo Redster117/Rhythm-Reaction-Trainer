@@ -9,7 +9,7 @@ function getPreferredKeyLabel(code) {
   return code;
 }
 
-export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onGameEnd, difficulty = {}, keybinds = {}, pattern = null, debug = false, keyboardOnly = true, soundEnabled = true } = {}) {
+export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onGameEnd, difficulty = {}, keybinds = {}, pattern = null, debug = false, keyboardOnly = true, soundEnabled = true, videoFile = null, keyOrder = null } = {}) {
   const ctx = canvas.getContext('2d');
   let rafId = null;
   let cues = [];
@@ -32,12 +32,14 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
   const maxWindow = goodWindow;
   const difficultyLevel = difficulty.level || 'noob';
 
-  let availableLabels = Object.keys(keybinds).length ? Object.keys(keybinds) : ['A', 'S', 'D', 'F'];
+  // Use custom key order if provided (for easter eggs), otherwise use keybinds
+  let availableLabels = keyOrder && Array.isArray(keyOrder) ? keyOrder : (Object.keys(keybinds).length ? Object.keys(keybinds) : ['A', 'S', 'D', 'F']);
   const normalizedKeybinds = {};
   Object.keys(keybinds).forEach((label) => {
     normalizedKeybinds[label] = keybinds[label];
   });
 
+  let videoBackground = null;
   let keyHandler = null;
   let pointerHandler = null;
 
@@ -241,6 +243,16 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     pendingScoreAdd = 0;
     cues = [];
 
+    // Load video if provided (easter egg)
+    if (videoFile) {
+      videoBackground = document.createElement('video');
+      videoBackground.src = videoFile;
+      videoBackground.loop = true;
+      videoBackground.crossOrigin = 'anonymous';
+      videoBackground.muted = true;
+      videoBackground.play().catch(() => {});
+    }
+
     const now = safeNow();
     const startAt = now + Math.max(leadTime, 0.35);
     const patternData = pattern
@@ -285,14 +297,26 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
       canvas.removeEventListener('pointerdown', pointerHandler);
       pointerHandler = null;
     }
+    if (videoBackground) {
+      videoBackground.pause();
+      videoBackground.currentTime = 0;
+      videoBackground = null;
+    }
   }
 
   function render() {
     const w = canvas.width;
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#0b0c0e';
-    ctx.fillRect(0, 0, w, h);
+    
+    // Draw video background if available (easter egg), otherwise black background
+    if (videoBackground && videoBackground.readyState === videoBackground.HAVE_CURRENT_FRAME || videoBackground.readyState === videoBackground.HAVE_FUTURE_FRAMES || videoBackground.readyState === videoBackground.HAVE_ENOUGH_DATA) {
+      ctx.drawImage(videoBackground, 0, 0, w, h);
+    } else {
+      ctx.fillStyle = '#0b0c0e';
+      ctx.fillRect(0, 0, w, h);
+    }
+    
     const now = safeNow();
 
     ctx.strokeStyle = 'rgba(255,255,255,0.22)';
@@ -383,14 +407,40 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     forcedPersistent = Boolean(options.persistent);
   }
 
+  function getNextAutoClickTiming() {
+    if (gameEnded) return null;
+    const now = safeNow();
+    const pendingCue = cues.find((cue) => !cue.hit);
+    if (!pendingCue) return null;
+
+    const timeUntilBeat = pendingCue.beatTime - now;
+    const canClickNow = timeUntilBeat <= 0.06 && timeUntilBeat >= -goodWindow;
+
+    return {
+      beatTime: pendingCue.beatTime,
+      timeUntilBeat,
+      canClickNow,
+      cue: pendingCue
+    };
+  }
+
   function devAutoClickFunc(judgement) {
-    if (gameEnded) return;
+    if (gameEnded) return false;
     const normalizedJudgement = ['Perfect', 'Good'].includes(judgement) ? judgement : 'Good';
+    const timingInfo = getNextAutoClickTiming();
+    
+    if (!timingInfo) {
+      return false;
+    }
+    
+    if (!timingInfo.canClickNow) {
+      return false;
+    }
+
     forcedJudgement = normalizedJudgement;
     forcedPersistent = true;
-    const pendingCue = cues.find((cue) => !cue.hit) || cues[0];
-    if (!pendingCue) return;
-    handleInput(safeNow(), pendingCue.code);
+    handleInput(safeNow(), timingInfo.cue.code);
+    return true;
   }
 
   function devAddScoreFunc(amount) {
@@ -422,6 +472,7 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     devAutoClickFunc,
     devAddScoreFunc,
     reset,
-    setDebug: (v) => { debug = !!v; }
+    setDebug: (v) => { debug = !!v; },
+    getNextAutoClickTiming
   };
 }

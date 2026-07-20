@@ -40,9 +40,10 @@ export class DeveloperControls {
     // The panel should always start closed after a refresh.
     this.isActive = false;
     this.statsOverrideOpen = false;
-    this.scoreMultiplierEnabled = false;
-    this.scoreMultiplier = 1;
-    this.statsEditEnabled = false;
+    this.scoreMultiplierEnabled = localStorage.getItem('rtr-dev-score-multiplier-enabled') === '1';
+    this.scoreMultiplier = Number(localStorage.getItem('rtr-dev-score-multiplier') || '1');
+    this.scoreMultiplier = Number.isFinite(this.scoreMultiplier) && this.scoreMultiplier > 0 ? this.scoreMultiplier : 1;
+    this.statsEditEnabled = localStorage.getItem('rtr-dev-stats-edit-enabled') === '1';
     this.statsOverrideSnapshot = null;
     this.statsAccessors = {};
     this.patternMemorySpeed = Number(localStorage.getItem('rtr-dev-pattern-memory-speed') || '1');
@@ -50,6 +51,7 @@ export class DeveloperControls {
     this.autoClickerTarget = String(localStorage.getItem('rtr-dev-auto-clicker-target') || 'good').toLowerCase();
     this.autoClickerTarget = ['good', 'perfect'].includes(this.autoClickerTarget) ? this.autoClickerTarget : 'good';
     this.autoClickerTimer = null;
+    this.autoClickAudioContext = null;
 
     this.init();
   }
@@ -232,19 +234,13 @@ export class DeveloperControls {
       }
     });
     document.getElementById('dev-score-multiplier-enabled')?.addEventListener('change', (e) => {
-      this.scoreMultiplierEnabled = Boolean(e.target.checked);
+      this.setScoreMultiplierEnabled(Boolean(e.target.checked));
     });
     document.getElementById('dev-score-multiplier')?.addEventListener('input', (e) => {
-      const value = Number(e.target.value);
-      this.scoreMultiplier = Number.isFinite(value) && value > 0 ? value : 1;
-      e.target.value = String(this.scoreMultiplier);
+      this.setScoreMultiplier(e.target.value);
     });
     document.getElementById('dev-stats-edit-enabled')?.addEventListener('change', (e) => {
-      this.statsEditEnabled = Boolean(e.target.checked);
-      if (typeof this.statsEditChangeCallback === 'function') {
-        this.statsEditChangeCallback(this.statsEditEnabled);
-      }
-      this.updateRevertButtonState();
+      this.setStatsEditEnabled(Boolean(e.target.checked));
     });
     document.getElementById('dev-revert-stats')?.addEventListener('click', () => {
       if (!this.statsOverrideSnapshot) return;
@@ -376,12 +372,51 @@ export class DeveloperControls {
     this.updateRevertButtonState();
   }
 
+  setScoreMultiplierEnabled(enabled = false) {
+    this.scoreMultiplierEnabled = Boolean(enabled);
+    try {
+      localStorage.setItem('rtr-dev-score-multiplier-enabled', this.scoreMultiplierEnabled ? '1' : '0');
+    } catch (err) {
+      console.warn('DeveloperControls: could not persist score multiplier state', err);
+    }
+    const toggle = document.getElementById('dev-score-multiplier-enabled');
+    if (toggle) toggle.checked = this.scoreMultiplierEnabled;
+    this.updateActionButtonStates?.();
+  }
+
+  setScoreMultiplier(multiplier = 1) {
+    const value = Number(multiplier);
+    this.scoreMultiplier = Number.isFinite(value) && value > 0 ? value : 1;
+    try {
+      localStorage.setItem('rtr-dev-score-multiplier', String(this.scoreMultiplier));
+    } catch (err) {
+      console.warn('DeveloperControls: could not persist score multiplier', err);
+    }
+    const input = document.getElementById('dev-score-multiplier');
+    if (input) input.value = String(this.scoreMultiplier);
+  }
+
   isScoreMultiplierEnabled() {
     return Boolean(this.scoreMultiplierEnabled);
   }
 
   getScoreMultiplier() {
     return Number.isFinite(this.scoreMultiplier) && this.scoreMultiplier > 0 ? this.scoreMultiplier : 1;
+  }
+
+  setStatsEditEnabled(enabled = false) {
+    this.statsEditEnabled = Boolean(enabled);
+    try {
+      localStorage.setItem('rtr-dev-stats-edit-enabled', this.statsEditEnabled ? '1' : '0');
+    } catch (err) {
+      console.warn('DeveloperControls: could not persist stats editing state', err);
+    }
+    const toggle = document.getElementById('dev-stats-edit-enabled');
+    if (toggle) toggle.checked = this.statsEditEnabled;
+    if (typeof this.statsEditChangeCallback === 'function') {
+      this.statsEditChangeCallback(this.statsEditEnabled);
+    }
+    this.updateRevertButtonState?.();
   }
 
   isStatsEditEnabled() {
@@ -472,21 +507,69 @@ export class DeveloperControls {
     }
   }
 
+  playAutoClickSound() {
+    if (typeof window === 'undefined') return;
+    try {
+      if (!this.autoClickAudioContext) {
+        this.autoClickAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (this.autoClickAudioContext.state === 'suspended') {
+        this.autoClickAudioContext.resume().catch(() => {});
+      }
+      const now = this.autoClickAudioContext.currentTime;
+      const osc = this.autoClickAudioContext.createOscillator();
+      const gain = this.autoClickAudioContext.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(880, now);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(0.08, now + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
+      osc.connect(gain);
+      gain.connect(this.autoClickAudioContext.destination);
+      osc.start(now);
+      osc.stop(now + 0.08);
+    } catch (err) {
+      console.warn('DeveloperControls: could not play auto-click sound', err);
+    }
+  }
+
+  runAutoClickerTick() {
+    if (!this.autoClickerEnabled || !this.gameInstance) return false;
+
+    const judgement = this.autoClickerTarget === 'perfect' ? 'Perfect' : 'Good';
+    const timingHint = typeof this.gameInstance.getNextAutoClickTiming === 'function'
+      ? this.gameInstance.getNextAutoClickTiming()
+      : null;
+
+    if (timingHint && typeof timingHint.canClickNow === 'boolean' && !timingHint.canClickNow) {
+      return false;
+    }
+
+    let didClick = false;
+    if (typeof this.gameInstance.devAutoClickFunc === 'function') {
+      didClick = Boolean(this.gameInstance.devAutoClickFunc(judgement));
+    } else if (typeof this.gameInstance.devInjectJudgementFunc === 'function') {
+      this.gameInstance.devInjectJudgementFunc(judgement, { persistent: true });
+      didClick = true;
+    }
+
+    if (didClick) {
+      this.playAutoClickSound();
+    }
+
+    return didClick;
+  }
+
   startAutoClickerLoop() {
     if (!this.autoClickerEnabled || this.autoClickerTimer) return;
+    this.runAutoClickerTick();
     this.autoClickerTimer = window.setInterval(() => {
       if (!this.autoClickerEnabled) {
         this.stopAutoClickerLoop();
         return;
       }
-      if (!this.gameInstance) return;
-      const judgement = this.autoClickerTarget === 'perfect' ? 'Perfect' : 'Good';
-      if (typeof this.gameInstance.devAutoClickFunc === 'function') {
-        this.gameInstance.devAutoClickFunc(judgement);
-      } else if (typeof this.gameInstance.devInjectJudgementFunc === 'function') {
-        this.gameInstance.devInjectJudgementFunc(judgement, { persistent: true });
-      }
-    }, 320);
+      this.runAutoClickerTick();
+    }, 80);
   }
 
   stopAutoClickerLoop() {

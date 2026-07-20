@@ -33,10 +33,6 @@ const bgMusicFileInput = document.getElementById('bg-music-file');
 const bgMusicLoopToggle = document.getElementById('bg-music-loop');
 const bgMusicToggle = document.getElementById('bg-music-toggle');
 const patternGuideToggle = document.getElementById('pattern-guide-toggle');
-const patternGuideLayers = document.getElementById('pattern-guide-layers');
-const patternGuideMissToggle = document.getElementById('pattern-guide-miss-toggle');
-const patternGuideGoodToggle = document.getElementById('pattern-guide-good-toggle');
-const patternGuidePerfectToggle = document.getElementById('pattern-guide-perfect-toggle');
 const loginModal = document.getElementById('login-modal');
 const settingsModal = document.getElementById('settings-modal');
 const signupModal = document.getElementById('signup-modal');
@@ -74,7 +70,6 @@ let currentKeybinds = getStoredKeybinds() || { ...DEFAULT_KEYBINDS };
 let backgroundMusicEnabled = false;
 let backgroundMusicLoop = true;
 let patternGuideEnabled = false;
-let patternGuideHitboxLayers = { miss: true, good: true, perfect: true };
 let bgMusicAudio = null;
 let bgMusicPauseDepth = 0;
 let customBackgroundMusicBlob = '';
@@ -96,6 +91,57 @@ let spinningHeavySequenceIndex = 0;
 let spinningHeavyOverlay = null;
 let spinningHeavyAudio = null;
 const spinningHeavyOpenSequence = ['KeyT','KeyW','KeyO','KeyF','KeyO','KeyR','KeyT'];
+
+// Keypress easter egg system
+const KEYPRESS_EASTER_EGGS = {
+  pootis: {
+    code: ['KeyP', 'KeyO', 'KeyO', 'KeyT', 'KeyI', 'KeyS'],
+    video: 'docs/Caked up Heavy Beat.mp4',
+    difficulty: 'pootis',
+    keyOrder: ['A', 'S', 'D', 'F']
+  },
+  kazotsky: {
+    code: ['KeyK', 'KeyA', 'KeyZ', 'KeyO', 'KeyT', 'KeyS', 'KeyK', 'KeyY'],
+    video: 'docs/Heavy Beats.mp4',
+    difficulty: 'kazotsky',
+    keyOrder: ['A', 'S', 'D', 'F']
+  },
+  heavybeats2: {
+    code: ['KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY', 'KeyB', 'KeyE', 'KeyA', 'KeyT', 'KeyS'],
+    video: 'docs/Heavy Beats 2.mp4',
+    difficulty: 'heavybeats2',
+    keyOrder: ['A', 'S', 'D', 'F']
+  },
+  racist: {
+    code: ['KeyR', 'KeyA', 'KeyC', 'KeyI', 'KeyS', 'KeyT'],
+    video: 'docs/Eat My Ass Heavy.mp4',
+    difficulty: 'racist',
+    keyOrder: ['A', 'S', 'D', 'F']
+  }
+};
+
+const STORAGE_KEYPRESS_EASTER_EGGS = 'rtr-keypress-easter-eggs-v1';
+
+function getStoredKeypressEasterEggs() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEYPRESS_EASTER_EGGS) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function setStoredKeypressEasterEggs(eggs) {
+  localStorage.setItem(STORAGE_KEYPRESS_EASTER_EGGS, JSON.stringify(eggs));
+}
+
+let keypressEasterEggSequenceIndex = {};
+let unlockedKeypressEasterEggs = getStoredKeypressEasterEggs();
+
+// Initialize sequence trackers
+Object.keys(KEYPRESS_EASTER_EGGS).forEach(key => {
+  keypressEasterEggSequenceIndex[key] = 0;
+});
+
 let selectedMode = 'beat';
 const difficultyPresets = {
   noob: { bpm: 40, perfect: 0.18, good: 0.30, leadTime: 1.0, patternStart: 4, patternBeats: 6, patternIncrease: false },
@@ -280,6 +326,49 @@ const MODE_DESCRIPTIONS = {
 function updateModeDescription() {
   if (!modeDescription) return;
   modeDescription.textContent = MODE_DESCRIPTIONS[selectedMode] || 'Select a mode to see how it plays.';
+  updateDifficultyOptions();
+}
+
+function updateDifficultyOptions() {
+  if (!difficultySelect) return;
+  const currentValue = difficultySelect.value;
+  const baseOptions = ['noob', 'ez', 'veteran', 'experienced', 'expert', 'pro'];
+  let availableOptions = baseOptions.slice();
+
+  // Add easter egg options if in keypress mode
+  if (selectedMode === 'key') {
+    Object.keys(KEYPRESS_EASTER_EGGS).forEach(eggKey => {
+      if (unlockedKeypressEasterEggs[eggKey]) {
+        availableOptions.push(KEYPRESS_EASTER_EGGS[eggKey].difficulty);
+      }
+    });
+  }
+
+  // Build new options HTML
+  let optionsHtml = baseOptions.map(opt => {
+    const label = opt.charAt(0).toUpperCase() + opt.slice(1);
+    return `<option value="${opt}">${label}</option>`;
+  }).join('');
+
+  // Add easter egg options to HTML
+  if (selectedMode === 'key') {
+    Object.keys(KEYPRESS_EASTER_EGGS).forEach(eggKey => {
+      if (unlockedKeypressEasterEggs[eggKey]) {
+        const eggDifficulty = KEYPRESS_EASTER_EGGS[eggKey].difficulty;
+        const eggLabel = eggDifficulty.toUpperCase();
+        optionsHtml += `<option value="${eggDifficulty}">${eggLabel}</option>`;
+      }
+    });
+  }
+
+  difficultySelect.innerHTML = optionsHtml;
+
+  // Restore previous selection if available, otherwise default
+  if (availableOptions.includes(currentValue)) {
+    difficultySelect.value = currentValue;
+  } else {
+    difficultySelect.value = 'noob';
+  }
 }
 
 function updateRunControls() {
@@ -592,12 +681,6 @@ function toggleSettingsModal() {
     bgMusicLoopToggle.checked = backgroundMusicLoop;
     bgMusicFileInput.value = '';
     patternGuideToggle.checked = patternGuideEnabled;
-    patternGuideMissToggle.checked = patternGuideHitboxLayers.miss;
-    patternGuideGoodToggle.checked = patternGuideHitboxLayers.good;
-    patternGuidePerfectToggle.checked = patternGuideHitboxLayers.perfect;
-    if (patternGuideLayers) {
-      patternGuideLayers.hidden = !patternGuideEnabled;
-    }
     accountPanel.hidden = !currentUser;
   }
 }
@@ -1057,12 +1140,7 @@ saveSettingsBtn.addEventListener('click', () => {
   backgroundMusicEnabled = bgMusicToggle.checked;
   backgroundMusicLoop = bgMusicLoopToggle.checked;
   patternGuideEnabled = patternGuideToggle.checked;
-  patternGuideHitboxLayers = {
-    miss: patternGuideMissToggle?.checked !== false,
-    good: patternGuideGoodToggle?.checked !== false,
-    perfect: patternGuidePerfectToggle?.checked !== false
-  };
-  
+
   if (backgroundMusicEnabled) {
     startBackgroundMusic();
   } else {
@@ -1192,16 +1270,43 @@ patternGuideToggle?.addEventListener('change', () => {
   showMessage(patternGuideEnabled ? 'Pattern guide enabled.' : 'Pattern guide disabled.');
 });
 
-[patternGuideMissToggle, patternGuideGoodToggle, patternGuidePerfectToggle].forEach((toggle) => {
-  toggle?.addEventListener('change', () => {
-    patternGuideHitboxLayers = {
-      miss: patternGuideMissToggle?.checked !== false,
-      good: patternGuideGoodToggle?.checked !== false,
-      perfect: patternGuidePerfectToggle?.checked !== false
-    };
-  });
-});
+function handleKeypressEasterEggCode(keyCode) {
+  // Only process if demoman easter egg is unlocked
+  if (!demoGifUnlocked) return;
 
+  Object.keys(KEYPRESS_EASTER_EGGS).forEach(eggKey => {
+    const egg = KEYPRESS_EASTER_EGGS[eggKey];
+    const expectedCode = egg.code[keypressEasterEggSequenceIndex[eggKey]];
+
+    if (keyCode === expectedCode) {
+      keypressEasterEggSequenceIndex[eggKey] += 1;
+      if (keypressEasterEggSequenceIndex[eggKey] === egg.code.length) {
+        // Unlock this easter egg
+        keypressEasterEggSequenceIndex[eggKey] = 0;
+        unlockedKeypressEasterEggs[eggKey] = true;
+        setStoredKeypressEasterEggs(unlockedKeypressEasterEggs);
+        
+        // Add difficulty to presets
+        difficultyPresets[egg.difficulty] = {
+          ...difficultyPresets.pro,
+          easterEgg: eggKey,
+          videoFile: egg.video,
+          keyOrder: egg.keyOrder
+        };
+
+        updateDifficultyOptions();
+        showMessage(`🎉 ${egg.difficulty.toUpperCase()} easter egg unlocked!`);
+      }
+    } else {
+      // Reset sequence if wrong code
+      if (keyCode === egg.code[0]) {
+        keypressEasterEggSequenceIndex[eggKey] = 1;
+      } else {
+        keypressEasterEggSequenceIndex[eggKey] = 0;
+      }
+    }
+  });
+}
 
 stopBtn.addEventListener('click', () => stopGame());
 
@@ -1252,6 +1357,9 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     stopGame();
   }
+
+  // Check for keypress easter egg codes
+  handleKeypressEasterEggCode(e.code);
 
   if (!spinningHeavyOverlay && spinningHeavyHoverActive) {
     if (e.code === spinningHeavyOpenSequence[spinningHeavySequenceIndex]) {
@@ -1456,7 +1564,9 @@ switch (selectedMode) {
       difficulty: difficultyWithLevel,
       keybinds: currentKeybinds,
       onGameEnd: stopGame,
-      soundEnabled: true
+      soundEnabled: true,
+      videoFile: difficultyWithLevel.videoFile || null,
+      keyOrder: difficultyWithLevel.keyOrder || null
     });
     break;
   case 'pattern':
@@ -1524,10 +1634,7 @@ function loadAudioSettings() {
   customBackgroundMusicUrl = settings.customBackgroundMusicUrl || '';
   backgroundMusicLoop = typeof settings.backgroundMusicLoop === 'boolean' ? settings.backgroundMusicLoop : true;
   patternGuideEnabled = typeof settings.patternGuideEnabled === 'boolean' ? settings.patternGuideEnabled : false;
-  patternGuideHitboxLayers = settings.patternGuideHitboxLayers && typeof settings.patternGuideHitboxLayers === 'object'
-    ? { miss: settings.patternGuideHitboxLayers.miss !== false, good: settings.patternGuideHitboxLayers.good !== false, perfect: settings.patternGuideHitboxLayers.perfect !== false }
-    : { miss: true, good: true, perfect: true };
-}
+  }
 
 function saveAudioSettings() {
   setStoredAudioSettings({
@@ -1535,7 +1642,6 @@ function saveAudioSettings() {
     customBackgroundMusicUrl,
     backgroundMusicLoop,
     patternGuideEnabled,
-    patternGuideHitboxLayers
   });
 }
 

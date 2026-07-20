@@ -288,12 +288,12 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     return judgement;
   }
 
-  function registerPress(clickTime) {
+  function registerPress(clickTime, overrideJudgement = null) {
     if (state !== 'input' || hasPlayerInput || !validateClickTiming(clickTime)) {
       return false;
     }
 
-    const judgement = judgePressTiming(clickTime, clickCount);
+    const judgement = overrideJudgement ?? judgePressTiming(clickTime, clickCount);
     userPresses.push(clickTime);
     pressJudgements.push(judgement);
     reactionTargetTimes = buildReactionBeatTargets(expectedClickTimes, userPresses);
@@ -524,6 +524,36 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     return true;
   }
 
+  function getNextAutoClickTiming() {
+    if (state !== 'input' || hasPlayerInput) {
+      return null;
+    }
+
+    const now = safeNow();
+    const nextBeatIndex = clickCount;
+    const targetBeatTime = Array.isArray(expectedClickTimes) && expectedClickTimes.length > nextBeatIndex
+      ? expectedClickTimes[nextBeatIndex]
+      : null;
+
+    if (typeof targetBeatTime !== 'number') {
+      return null;
+    }
+
+    const earlyWindowSeconds = 0.06;
+    const lateWindowSeconds = 0.16;
+    const timeUntilBeat = targetBeatTime - now;
+    const canClickNow = timeUntilBeat <= earlyWindowSeconds && timeUntilBeat >= -lateWindowSeconds;
+
+    return {
+      beatIndex: nextBeatIndex,
+      targetBeatTime,
+      timeUntilBeat,
+      earlyWindowSeconds,
+      lateWindowSeconds,
+      canClickNow
+    };
+  }
+
   function getTimingTolerance() {
     const difficultyLevel = difficulty.level || 'noob';
     const map = {
@@ -568,25 +598,19 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
   }
 
   function devAutoClickFunc(judgement) {
-    if (state !== 'input' || hasPlayerInput) return;
+    if (state !== 'input' || hasPlayerInput) return false;
     const normalizedJudgement = ['Perfect', 'Good'].includes(judgement) ? judgement : 'Good';
-    const clickTime = safeNow();
-    registerPress(clickTime);
-
-    if (normalizedJudgement === 'Perfect') {
-      score += 300;
-      combo += 1;
-      perfectCount += 1;
-      lastJudgement = 'Perfect';
-    } else {
-      score += 100;
-      combo += 1;
-      goodCount += 1;
-      lastJudgement = 'Good';
+    const timingInfo = getNextAutoClickTiming();
+    if (timingInfo) {
+      if (!timingInfo.canClickNow) {
+        return false;
+      }
     }
 
-    totalJudgements += 1;
-    onUpdateHUDSafe();
+    const now = safeNow();
+    const targetBeatTime = timingInfo ? timingInfo.targetBeatTime : null;
+    const resolvedClickTime = typeof targetBeatTime === 'number' ? Math.max(now, targetBeatTime) : now;
+    return registerPress(resolvedClickTime, normalizedJudgement);
   }
 
   function devAddScoreFunc(amount) {
@@ -712,5 +736,5 @@ export default function startPatternMemory({ canvas, audioScheduler, onUpdateHUD
     return scheduledMs;
   }
 
-  return { start, stop, getState, handleSpaceInput, devForceTile, devInjectJudgementFunc, devAutoClickFunc, devAddScoreFunc, reset, setGuideOptions, setRollingOffset, getGuideOptions, getRollingOffset, getScheduledGuideTimings, setPlaybackSpeed, getPlaybackSpeed };
+  return { start, stop, getState, handleSpaceInput, devForceTile, devInjectJudgementFunc, devAutoClickFunc, devAddScoreFunc, reset, setGuideOptions, setRollingOffset, getGuideOptions, getRollingOffset, getScheduledGuideTimings, setPlaybackSpeed, getPlaybackSpeed, getNextAutoClickTiming };
 }
