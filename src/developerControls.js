@@ -34,7 +34,9 @@ export class DeveloperControls {
       { key: 'thats racist.mp3', label: 'thats racist.mp3', src: 'docs/thats racist.mp3', type: 'audio' },
       { key: 'demo resound.mp3', label: 'demo resound.mp3', src: 'docs/demo resound.mp3', type: 'audio' },
       { key: 'demo old sound.mp3', label: 'demo old sound.mp3', src: 'docs/demo old sound.mp3', type: 'audio' },
-      { key: 'spinning heavy audio.mp3', label: 'spinning heavy audio.mp3', src: 'docs/spinning heavy audio.mp3', type: 'audio' }
+      { key: 'spinning heavy audio.mp3', label: 'spinning heavy audio.mp3', src: 'docs/spinning heavy audio.mp3', type: 'audio' },
+      { key: 'Caked up Heavy Beat.mp3', label: 'Caked up Heavy Beat.mp3', src: 'docs/Caked up Heavy Beat.mp3', type: 'audio' },
+      { key: 'Caked up Heavy Beat.gif', label: 'Caked up Heavy Beat.gif', src: 'docs/Caked up Heavy Beat.gif', type: 'image' }
     ];
     // Do not persist dev console open state across page reloads.
     // The panel should always start closed after a refresh.
