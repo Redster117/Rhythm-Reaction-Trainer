@@ -92,29 +92,40 @@ let spinningHeavyOverlay = null;
 let spinningHeavyAudio = null;
 const spinningHeavyOpenSequence = ['KeyT','KeyW','KeyO','KeyF','KeyO','KeyR','KeyT'];
 
+// GIF preload cache for faster loading
+let gifPreloadCache = {};
+
+// Auto-clicker detection state
+let recentKeyPresses = [];
+const AUTOCLICK_DETECTION_WINDOW = 500; // ms
+const AUTOCLICK_THRESHOLD = 5; // rapid presses in window = auto-clicker
+let isAutoClickerDetected = false;
+
 // Keypress easter egg system
 const KEYPRESS_EASTER_EGGS = {
   pootis: {
     code: ['KeyP', 'KeyO', 'KeyO', 'KeyT', 'KeyI', 'KeyS'],
-    video: 'docs/Caked up Heavy Beat.mp4',
+    gif: 'docs/Caked up Heavy Beat.gif',
+    audioFile: 'docs/Caked up Heavy Beat.mp3',
     difficulty: 'pootis',
+    pattern: 'a,f,s,a,s,d,af,ds,af',
     keyOrder: ['A', 'S', 'D', 'F']
   },
   kazotsky: {
     code: ['KeyK', 'KeyA', 'KeyZ', 'KeyO', 'KeyT', 'KeyS', 'KeyK', 'KeyY'],
-    video: 'docs/Heavy Beats.mp4',
+    gif: 'docs/Heavy Beats.gif',
     difficulty: 'kazotsky',
     keyOrder: ['A', 'S', 'D', 'F']
   },
   heavybeats2: {
     code: ['KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY', 'KeyB', 'KeyE', 'KeyA', 'KeyT', 'KeyS'],
-    video: 'docs/Heavy Beats 2.mp4',
+    gif: 'docs/Heavy Beats 2.gif',
     difficulty: 'heavybeats2',
     keyOrder: ['A', 'S', 'D', 'F']
   },
   racist: {
     code: ['KeyR', 'KeyA', 'KeyC', 'KeyI', 'KeyS', 'KeyT'],
-    video: 'docs/Eat My Ass Heavy.mp4',
+    gif: 'docs/Eat My Ass Heavy.gif',
     difficulty: 'racist',
     keyOrder: ['A', 'S', 'D', 'F']
   }
@@ -141,6 +152,40 @@ let unlockedKeypressEasterEggs = getStoredKeypressEasterEggs();
 Object.keys(KEYPRESS_EASTER_EGGS).forEach(key => {
   keypressEasterEggSequenceIndex[key] = 0;
 });
+
+// Easter egg pattern parser: converts "a,f,s,   a,s,d  af, ds, af" format
+// into proper cue patterns with simultaneous key support
+// Consecutive letters with no spaces = simultaneous keys (e.g., "af" means both A and F at the same time)
+// Commas and spaces = separators between cues
+function parseEasterEggPattern(patternStr = '') {
+  if (!patternStr || typeof patternStr !== 'string') return [];
+  
+  const result = [];
+  let currentCue = '';
+  
+  for (let i = 0; i < patternStr.length; i++) {
+    const char = patternStr[i];
+    
+    if (/[A-Fa-f]/.test(char)) {
+      // Accumulate letters for the current cue
+      currentCue += char.toUpperCase();
+    } else if (/[,\s]/.test(char)) {
+      // Separator found: if we have accumulated letters, save them as a cue
+      if (currentCue.length > 0) {
+        // Split multi-character cues into arrays of individual keys (for simultaneous presses)
+        result.push(currentCue.split(''));
+        currentCue = '';
+      }
+    }
+  }
+  
+  // Don't forget the last cue if pattern doesn't end with a separator
+  if (currentCue.length > 0) {
+    result.push(currentCue.split(''));
+  }
+  
+  return result;
+}
 
 let selectedMode = 'beat';
 const difficultyPresets = {
@@ -329,6 +374,13 @@ function updateModeDescription() {
   updateDifficultyOptions();
 }
 
+function preloadEasterEggGif(gifPath) {
+  if (!gifPath || gifPreloadCache[gifPath]) return;
+  const gif = new Image();
+  gif.src = gifPath;
+  gifPreloadCache[gifPath] = gif;
+}
+
 function updateDifficultyOptions() {
   if (!difficultySelect) return;
   const currentValue = difficultySelect.value;
@@ -340,6 +392,8 @@ function updateDifficultyOptions() {
     Object.keys(KEYPRESS_EASTER_EGGS).forEach(eggKey => {
       if (unlockedKeypressEasterEggs[eggKey]) {
         availableOptions.push(KEYPRESS_EASTER_EGGS[eggKey].difficulty);
+        // Preload GIFs for faster loading
+        preloadEasterEggGif(KEYPRESS_EASTER_EGGS[eggKey].gif);
       }
     });
   }
@@ -952,7 +1006,6 @@ function saveUserData() {
       customBackgroundMusicUrl,
       backgroundMusicLoop,
       patternGuideEnabled,
-      patternGuideHitboxLayers
     }
   };
   setStoredUsers(users);
@@ -1014,9 +1067,6 @@ async function loginUser() {
     customBackgroundMusicUrl = savedAudio.customBackgroundMusicUrl || customBackgroundMusicUrl;
     backgroundMusicLoop = typeof savedAudio.backgroundMusicLoop === 'boolean' ? savedAudio.backgroundMusicLoop : true;
     patternGuideEnabled = typeof savedAudio.patternGuideEnabled === 'boolean' ? savedAudio.patternGuideEnabled : patternGuideEnabled;
-    patternGuideHitboxLayers = savedAudio.patternGuideHitboxLayers && typeof savedAudio.patternGuideHitboxLayers === 'object'
-      ? { miss: savedAudio.patternGuideHitboxLayers.miss !== false, good: savedAudio.patternGuideHitboxLayers.good !== false, perfect: savedAudio.patternGuideHitboxLayers.perfect !== false }
-      : patternGuideHitboxLayers;
     showMessage(`Welcome back, ${username}.`);
   }
   currentUser = username;
@@ -1060,7 +1110,6 @@ async function signupUser() {
       customBackgroundMusicUrl,
       backgroundMusicLoop,
       patternGuideEnabled,
-      patternGuideHitboxLayers
     }
   };
   setStoredUsers(users);
@@ -1154,6 +1203,10 @@ saveSettingsBtn.addEventListener('click', () => {
   // Trigger easter egg on save if conditions are met
   if (demoGifUnlockReady) {
     demoGifUnlocked = true;
+    // Reset keybinds to defaults after unlocking demoman easter egg
+    currentKeybinds = { ...DEFAULT_KEYBINDS };
+    setStoredKeybinds(currentKeybinds);
+    loadKeybindInputs();
     showDemoGifIfUnlocked();
     demoGifUnlockReady = false;
   } else {
@@ -1264,15 +1317,28 @@ bgMusicToggle.addEventListener('change', () => {
 
 patternGuideToggle?.addEventListener('change', () => {
   patternGuideEnabled = patternGuideToggle.checked;
-  if (patternGuideLayers) {
-    patternGuideLayers.hidden = !patternGuideEnabled;
-  }
   showMessage(patternGuideEnabled ? 'Pattern guide enabled.' : 'Pattern guide disabled.');
 });
+
+function detectAutoClicker(keyCode) {
+  const now = Date.now();
+  // Remove old key presses outside detection window
+  recentKeyPresses = recentKeyPresses.filter(time => now - time < AUTOCLICK_DETECTION_WINDOW);
+  // Add current key press
+  recentKeyPresses.push(now);
+  
+  // If we have many rapid presses, it's likely an auto-clicker
+  isAutoClickerDetected = recentKeyPresses.length >= AUTOCLICK_THRESHOLD;
+  window.isAutoClickerDetected = isAutoClickerDetected;
+  return isAutoClickerDetected;
+}
 
 function handleKeypressEasterEggCode(keyCode) {
   // Only process if demoman easter egg is unlocked
   if (!demoGifUnlocked) return;
+  
+  // Detect auto-clicker usage
+  detectAutoClicker(keyCode);
 
   Object.keys(KEYPRESS_EASTER_EGGS).forEach(eggKey => {
     const egg = KEYPRESS_EASTER_EGGS[eggKey];
@@ -1288,9 +1354,11 @@ function handleKeypressEasterEggCode(keyCode) {
         
         // Add difficulty to presets
         difficultyPresets[egg.difficulty] = {
-          ...difficultyPresets.pro,
+          ...difficultyPresets.noob,
           easterEgg: eggKey,
-          videoFile: egg.video,
+          gifFile: egg.gif,
+          audioFile: egg.audioFile,
+          pattern: egg.pattern,
           keyOrder: egg.keyOrder
         };
 
@@ -1557,6 +1625,18 @@ switch (selectedMode) {
     }
     break;
   case 'key':
+    // For easter egg difficulties, parse the custom pattern
+    let keypressCustomPattern = null;
+    if (difficultyWithLevel.pattern) {
+      const parsedPattern = parseEasterEggPattern(difficultyWithLevel.pattern);
+      if (parsedPattern.length > 0) {
+        keypressCustomPattern = parsedPattern;
+      }
+    }
+    // Reset auto-clicker detection for new game
+    recentKeyPresses = [];
+    isAutoClickerDetected = false;
+    
     gameInstance = startKeyPress({
       canvas,
       audioScheduler,
@@ -1565,8 +1645,12 @@ switch (selectedMode) {
       keybinds: currentKeybinds,
       onGameEnd: stopGame,
       soundEnabled: true,
-      videoFile: difficultyWithLevel.videoFile || null,
-      keyOrder: difficultyWithLevel.keyOrder || null
+      gifFile: difficultyWithLevel.gifFile || null,
+      keyOrder: difficultyWithLevel.keyOrder || null,
+      customPattern: keypressCustomPattern,
+      audioFile: difficultyWithLevel.audioFile || null,
+      isEasterEgg: !!difficultyWithLevel.audioFile,
+      showCountdown: !!difficultyWithLevel.audioFile
     });
     break;
   case 'pattern':
@@ -1579,7 +1663,6 @@ switch (selectedMode) {
       onGameEnd: stopGame,
       customPattern,
       showGuide: patternGuideEnabled,
-      hitboxLayers: patternGuideHitboxLayers,
       timingOverrides: null
     });
     if (gameInstance && typeof gameInstance.handleSpaceInput === 'function') {
