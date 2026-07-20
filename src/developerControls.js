@@ -555,7 +555,7 @@ export class DeveloperControls {
       didClick = true;
     }
 
-    if (didClick) {
+    if (didClick && !(this.gameInstance && this.gameInstance.isEasterEgg)) {
       this.playAutoClickSound();
     }
 
