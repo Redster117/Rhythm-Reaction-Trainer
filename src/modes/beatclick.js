@@ -274,16 +274,40 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
     forcedPersistent = Boolean(options.persistent);
   }
 
+  function getNextAutoClickTiming() {
+    if (gameEnded) return null;
+    const now = scheduler.getCurrentTime();
+    const pendingCue = cues.find((cue) => !cue.hit);
+    if (!pendingCue) return null;
+
+    const timeUntilBeat = pendingCue.beatTime - now;
+    const canClickNow = timeUntilBeat <= 0.06 && timeUntilBeat >= -timingWindows.good;
+
+    return {
+      beatTime: pendingCue.beatTime,
+      timeUntilBeat,
+      canClickNow,
+      cue: pendingCue
+    };
+  }
+
   function devAutoClickFunc(judgement) {
-    if (gameEnded) return;
+    if (gameEnded) return false;
     const normalizedJudgement = ['Perfect', 'Good'].includes(judgement) ? judgement : 'Good';
+    const timingInfo = getNextAutoClickTiming();
+    
+    if (!timingInfo) {
+      return false;
+    }
+    
+    if (!timingInfo.canClickNow) {
+      return false;
+    }
+
     forcedJudgement = normalizedJudgement;
     forcedPersistent = true;
-    if (mouseHandler) {
-      mouseHandler(new MouseEvent('mousedown', { bubbles: true, clientX: canvas.width / 2, clientY: canvas.height / 2 }));
-    } else {
-      processInput(scheduler.getCurrentTime());
-    }
+    processInput(scheduler.getCurrentTime());
+    return true;
   }
 
   function devAddScoreFunc(amount) {
@@ -315,5 +339,5 @@ export function startBeatClick(scheduler, canvas, { onUpdateHUD, difficulty = {}
     start();
   }
 
-  return { start, stop, getState, devInjectJudgementFunc, devAutoClickFunc, devAddScoreFunc, reset, handleSpaceInput };
+  return { start, stop, getState, devInjectJudgementFunc, devAutoClickFunc, devAddScoreFunc, reset, handleSpaceInput, getNextAutoClickTiming };
 }
