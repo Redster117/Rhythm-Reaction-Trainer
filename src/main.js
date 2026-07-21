@@ -111,6 +111,8 @@ const KEYPRESS_EASTER_EGGS = {
     pattern: 'a(0),f(0.42),s(0.44),a(0.48),s(2.8),d(0.42),a(0.44),fa(2.9),ds(0.42),as(0.44)',
     keyOrder: ['A', 'S', 'D', 'F'],
     cueSpacing: 0,
+    leadTime: 1.0,
+    postCountdownDelay: 2.35,
   },
   heavydance: {
     code: ['KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY', 'KeyD', 'KeyA', 'KeyN', 'KeyC', 'KeyE'],
@@ -132,6 +134,8 @@ const KEYPRESS_EASTER_EGGS = {
     pattern: 'a(0),f(0.42),s(0.44),a(0.48),s(2.8),d(0.42),a(0.44),fa(2.9),ds(0.42),as(0.44)',
     keyOrder: ['A', 'S', 'D', 'F'],
     cueSpacing: 0,
+    leadTime: 0.45,
+    postCountdownDelay: 0,
   }
 };
 
@@ -183,7 +187,7 @@ function parseEasterEggPattern(patternStr = '') {
     if (!match) return;
 
     const keys = match[1].toUpperCase().split('');
-    const delay = match[2] ? parseFloat(match[2]) : undefined;
+    const delay = match[2] !== undefined ? parseFloat(match[2]) : undefined;
 
     result.push({ keys, delay });
   });
@@ -1359,7 +1363,9 @@ function unlockPootisEasterEgg() {
     pattern: egg.pattern,
     keyOrder: egg.keyOrder,
     cueSpacing: egg.cueSpacing,
-    timingOffset: egg.timingOffset
+    timingOffset: egg.timingOffset,
+    leadTime: egg.leadTime,
+    postCountdownDelay: egg.postCountdownDelay
   };
   updateDifficultyOptions();
   // Ensure easter egg is usable immediately
@@ -1372,7 +1378,7 @@ function unlockPootisEasterEgg() {
 }
 
 function unlockHeavyassEasterEgg() {
-  const eggKey = 'tftwerk';
+  const eggKey = 'heavyass';
   const egg = KEYPRESS_EASTER_EGGS[eggKey];
   if (unlockedKeypressEasterEggs[egg.difficulty]) return;
 
@@ -1388,7 +1394,9 @@ function unlockHeavyassEasterEgg() {
     pattern: egg.pattern,
     keyOrder: egg.keyOrder,
     cueSpacing: egg.cueSpacing,
-    timingOffset: egg.timingOffset
+    timingOffset: egg.timingOffset,
+    leadTime: egg.leadTime,
+    postCountdownDelay: egg.postCountdownDelay
   };
   updateDifficultyOptions();
   // Ensure easter egg is usable immediately
@@ -1429,7 +1437,10 @@ function handleKeypressEasterEggCode(keyCode) {
           pattern: egg.pattern,
           keyOrder: egg.keyOrder,
           cueSpacing: egg.cueSpacing,
-          timingOffset: egg.timingOffset
+          timingOffset: egg.timingOffset,
+          leadTime: egg.leadTime,
+          postCountdownDelay: egg.postCountdownDelay,
+          countdownTime: egg.countdownTime
         };
 
         updateDifficultyOptions();

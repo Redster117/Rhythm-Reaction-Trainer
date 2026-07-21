@@ -93,13 +93,14 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     // If custom pattern is provided (easter egg), use it instead
     if (customPattern && Array.isArray(customPattern) && customPattern.length > 0) {
       let currentBeat = startTime;
+      const speedScale = typeof difficulty.patternSpeed === 'number' ? difficulty.patternSpeed : 1.0;
       return customPattern.map((entry) => {
         const keysArray = Array.isArray(entry)
           ? entry
           : Array.isArray(entry.keys)
             ? entry.keys
             : [entry.keys];
-        const delay = isEasterEgg && typeof entry.delay === 'number' ? entry.delay : 0;
+        const delay = isEasterEgg && typeof entry.delay === 'number' ? entry.delay * speedScale : 0;
         const beatTime = currentBeat + delay;
         currentBeat = beatTime;
         const label = keysArray[0];
@@ -394,7 +395,9 @@ export default function startKeyPress({ canvas, audioScheduler, onUpdateHUD, onG
     }
 
     const now = safeNow();
-    const delayAfterCountdown = showCountdown ? 2.35 : 0.0; // only add extra startup buffer for easter egg video/audio runs
+    const delayAfterCountdown = typeof difficulty.postCountdownDelay === 'number'
+      ? difficulty.postCountdownDelay
+      : (showCountdown ? 2.35 : 0.0); // extra startup buffer after countdown for easter egg audio/video alignment
     const startAt = now + Math.max(leadTime, 0) + countdownTime + delayAfterCountdown;
     const patternData = pattern
       ? pattern.map((offset, index) => {
