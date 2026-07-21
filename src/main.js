@@ -119,23 +119,11 @@ const KEYPRESS_EASTER_EGGS = {
     visual: 'docs/Heavy Beats.mp4',
     audioFile: 'docs/Heavy Beats.mp3',
     difficulty: 'heavy dance',
-    pattern: 'f(0.36),s(0.46),a(0.49),a(0.60),a(0.40),s(0.60),d(0.42),f(0.44),a(0.37),a(0.37),s(0.44),d(0.28),f(0.38),a(0.19),s(0.36), d(0.36),f(0.36),a(0.36)',
+    pattern: 'd(0.36),s(0.46),f(0.49),a(0.60),d(0.40),s(0.60),f(0.42),a(0.44),d(0.37),d(0.37),s(0.44),d(0.28),a(0.38),s(0.36),d(0.36),f(0.36)',
     keyOrder: ['A', 'S', 'D', 'F'],
     cueSpacing: 0,
-    leadTime: 1.0,
+    leadTime: 0.96,
     postCountdownDelay: 1.125,
-  },
-  heavybeats2: {
-    code: ['KeyF', 'KeyR', 'KeyE', 'KeyA', 'KeyK', 'KeyY', 'KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY',],
-    visual: 'docs/Heavy Beats 2.mp4',
-    audioFile: 'docs/Heavy Beats 2.mp3',
-    difficulty: 'freaky heavy',
-    pattern: 'a(0),s(0.17),d(0.20),f(0.17),a(0.17),s(0.21),d(0.19),f(0.14),a(0.38),s(0.16),d(0.17),f(0.18),a(0.18),s(0.18),d(0.17),f(0.17),a(0.19),s(0.19),d(0.31),f(0.18),a(0.31),s(0.16),d(0.17),f(0.14),a(0.30),s(0.22),d(0.16),f(0.30),a(0.17),s(0.17),d(0.16),f(0.22),a(0.13),s(0.29),d(0.17),f(0.16),a(0.16),s(0.21),d(0.28)',
-    patternSpeed: 10,
-    keyOrder: ['A', 'S', 'D', 'F'],
-    cueSpacing: 0,
-    leadTime: 0.25,
-    postCountdownDelay: 0,
   },
   heavyass: {
     code: ['KeyT', 'KeyF', 'KeyT', 'KeyW', 'KeyE', 'KeyR', 'KeyK'],
@@ -168,25 +156,12 @@ let keypressEasterEggSequenceIndex = {};
 let unlockedKeypressEasterEggs = getStoredKeypressEasterEggs();
 let activeKeypressEasterEggs = {};
 
-// Initialize sequence trackers
+// Initialise sequence trackers
 Object.keys(KEYPRESS_EASTER_EGGS).forEach(key => {
   keypressEasterEggSequenceIndex[key] = 0;
   activeKeypressEasterEggs[key] = false;
 });
 
-// Easter egg pattern parser: converts patterns like
-//   a,f,s,   a,s,d  af, ds, af
-// into proper cue objects for keypress mode.
-//
-// Each cue may also include its own delay in seconds:
-//   a(0.2), a(0.4), a(0.1), f, s, d
-// This means repeated keys like a,a,a can each have their own spacing.
-// These delays are defined directly in the main easter egg pattern string,
-// not via dev console controls.
-//
-// Consecutive letters with no spaces = simultaneous keys
-//   af means both A and F at the same time.
-// Commas and spaces separate cues.
 function parseEasterEggPattern(patternStr = '') {
   if (!patternStr || typeof patternStr !== 'string') return [];
 
@@ -967,7 +942,7 @@ function showDemoGifIfUnlocked() {
       }
 
       // Known demo GIF duration (seconds). Adjust if file changes.
-      const DEMO_GIF_DURATION = 0.267;
+      const DEMO_GIF_DURATION = 2.67;
       const startTime = Date.now();
       const targetEndTime = startTime + Math.round(DEMO_GIF_DURATION * 1000);
 
@@ -990,7 +965,6 @@ function showDemoGifIfUnlocked() {
 
       DemoAudio.addEventListener('ended', onAudioEnded);
 
-      // Remove overlay and show bottom-right gif when the GIF duration has elapsed
       const remaining = targetEndTime - Date.now();
       setTimeout(() => {
         try {
@@ -1148,7 +1122,6 @@ async function signupUser() {
 function stopGame() {
   if (!isGameRunning) return;
 
-  // Attempt to persist final stats from the running game instance before stopping
   try {
     if (gameInstance && typeof gameInstance.getState === 'function') {
       const st = gameInstance.getState();
@@ -1161,7 +1134,6 @@ function stopGame() {
         const totalOffset = totals.totalOffset || 0;
         const accuracy = totalJudgements ? Math.round(((totals.perfectCount || 0) + (totals.goodCount || 0)) / totalJudgements * 100) : 0;
         const precision = totalJudgements ? Math.round((totalOffset / totalJudgements) * 1000) : 0;
-        // Save progress for this run
         saveProgress(score, accuracy, combo, perfects, precision);
       }
     }
@@ -1346,9 +1318,7 @@ patternGuideToggle?.addEventListener('change', () => {
 
 function detectAutoClicker(keyCode) {
   const now = Date.now();
-  // Remove old key presses outside detection window
   recentKeyPresses = recentKeyPresses.filter(time => now - time < AUTOCLICK_DETECTION_WINDOW);
-  // Add current key press
   recentKeyPresses.push(now);
   
   // If we have many rapid presses, it's likely an auto-clicker
@@ -1417,36 +1387,6 @@ function unlockHeavyassEasterEgg() {
     difficultySelect.value = egg.difficulty;
   }
   showMessage('🎉 HEAVYASS easter egg unlocked!');
-}
-function unlockFreakyHeavyEasterEgg() {
-  const eggKey = 'freakyheavy';
-  const egg = KEYPRESS_EASTER_EGGS[eggKey];
-  if (unlockedKeypressEasterEggs[egg.difficulty]) return;
-
-  keypressEasterEggSequenceIndex[eggKey] = 0;
-  unlockedKeypressEasterEggs[egg.difficulty] = true;
-  setStoredKeypressEasterEggs(unlockedKeypressEasterEggs);
-  activeKeypressEasterEggs[eggKey] = true;
-  difficultyPresets[egg.difficulty] = {
-    ...difficultyPresets.pro,
-    easterEgg: eggKey,
-    visualFile: egg.visual,
-    audioFile: egg.audioFile,
-    pattern: egg.pattern,
-    keyOrder: egg.keyOrder,
-    cueSpacing: egg.cueSpacing,
-    timingOffset: egg.timingOffset,
-    leadTime: egg.leadTime,
-    postCountdownDelay: egg.postCountdownDelay
-  };
-  updateDifficultyOptions();
-  // Ensure easter egg is usable immediately
-  demoGifUnlocked = true;
-  try { showDemoGifIfUnlocked(); } catch (e) {}
-  if (typeof difficultySelect !== 'undefined' && difficultySelect) {
-    difficultySelect.value = egg.difficulty;
-  }
-  showMessage('🎉 FREAKY HEAVY easter egg unlocked!');
 }
 
 function handleKeypressEasterEggCode(keyCode) {
@@ -1584,7 +1524,7 @@ function setupModalCloseHandlers() {
       if (event.target === modal) {
         modal.hidden = true;
       }
-    }, true); // Use capture phase to ensure we catch the event
+    }, true);
   });
 }
 
@@ -1723,7 +1663,7 @@ startBtn.addEventListener('click', async () => {
     const isKeyEasterEgg = selectedMode === 'key' && !!difficultyWithLevel.audioFile;
     if (!isKeyEasterEgg) {
       audioScheduler = new AudioScheduler();
-      audioScheduler.setSoundEnabled(true); // Sound effects always enabled
+      audioScheduler.setSoundEnabled(true);
       if (selectedMode === 'key') {
         audioScheduler.setSoundProfile('keypress');
       } else {

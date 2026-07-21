@@ -2,26 +2,22 @@
 import { AudioSchedulerPM } from './audioPatternMemory.js';
 import PatternGuide from './patternGuide.js';
 import { getPatternMemoryTimingTolerance } from './timingConfig.js';
-// Secret developer console with Konami code activation
 
 export class DeveloperControls {
   constructor({ activationSequence } = {}) {
     this.isActive = false;
     const defaultActivationSequence = [
-      'Digit1', 'Digit3', 'Digit4'
+       'ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight',
+       'KeyR', 'KeyR', 'KeyT', 'Minus', 'Digit6', 'Period', 'Digit0'
     ];
-    // Original console sequence preserved for later:
-    // [
-    //   'ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight',
-    //   'KeyR', 'KeyR', 'KeyT', 'Minus', 'Digit6', 'Period', 'Digit0'
-    // ]
+    
     this.activationSequence = this.normalizeActivationSequence(
       activationSequence || defaultActivationSequence
     );
     this.konamiIndex = 0;
     this.panel = null;
     this.gameInstance = null;
-    this.patternConfig = Array(10).fill(0); // 0 means none
+    this.patternConfig = Array(10).fill(0);
     this.docsMediaAssets = [
       { key: 'Demoman.png', label: 'Demoman.png', src: 'docs/Demoman.png', type: 'image' },
       { key: 'demo.gif', label: 'demo.gif', src: 'docs/demo.gif', type: 'image' },
@@ -38,8 +34,7 @@ export class DeveloperControls {
       { key: 'demo old sound.mp3', label: 'demo old sound.mp3', src: 'docs/demo old sound.mp3', type: 'audio' },
       { key: 'spinning heavy audio.mp3', label: 'spinning heavy audio.mp3', src: 'docs/spinning heavy audio.mp3', type: 'audio' },
     ];
-    // Do not persist dev console open state across page reloads.
-    // The panel should always start closed after a refresh.
+
     this.isActive = false;
     this.statsOverrideOpen = false;
     this.scoreMultiplierEnabled = localStorage.getItem('rtr-dev-score-multiplier-enabled') === '1';
@@ -59,12 +54,10 @@ export class DeveloperControls {
   }
 
   init() {
-    // Listen for Konami code (guarded to avoid runtime errors if handler not present)
     window.addEventListener('keydown', (e) => {
       try {
         if (typeof this.handleKonamiCode === 'function') this.handleKonamiCode(e);
       } catch (err) {
-        // swallow to avoid breaking page scripts
         console.error('DevControls: Konami handler error', err);
       }
     });
@@ -100,7 +93,7 @@ export class DeveloperControls {
     // Tile previews
     const tileButtons = [1,2,3,4,5,6,7].map(i => `<button class="dev-preview-tile" data-tile="${i}" style="flex:1 0 30%; padding:6px; background:#223344; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:11px; margin:2px">${['R1','O2','Y3','G4','B5','Pu6','Pi7'][i-1]}</button>`).join('');
 
-    // media options
+    // Media options
     const mediaOptions = this.docsMediaAssets.map(a => `<option value="${a.key}">${a.label}</option>`).join('');
     const keyPressSpeedOptions = ['0.5', '0.75', '1', '1.25', '1.5', '2']
       .map((value) => {
@@ -157,7 +150,6 @@ export class DeveloperControls {
     document.body.appendChild(panel);
     this.panel = panel;
 
-    // Attach event listeners
     this.attachEventListeners();
     this.updateActivationInstructions();
   }
