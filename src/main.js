@@ -112,23 +112,26 @@ const KEYPRESS_EASTER_EGGS = {
     keyOrder: ['A', 'S', 'D', 'F'],
     cueSpacing: 0,
   },
-  kazotsky: {
-    code: ['KeyK', 'KeyA', 'KeyZ', 'KeyO', 'KeyT', 'KeyS', 'KeyK', 'KeyY'],
+  heavydance: {
+    code: ['KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY', 'KeyD', 'KeyA', 'KeyN', 'KeyC', 'KeyE'],
     gif: 'docs/Heavy Beats.gif',
-    difficulty: 'kazotsky',
+    difficulty: 'Heavy Dance',
     keyOrder: ['A', 'S', 'D', 'F']
   },
   heavybeats2: {
     code: ['KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY', 'KeyB', 'KeyE', 'KeyA', 'KeyT', 'KeyS'],
     gif: 'docs/Heavy Beats 2.gif',
-    difficulty: 'heavybeats2',
+    difficulty: 'heavybeats',
     keyOrder: ['A', 'S', 'D', 'F']
   },
-  racist: {
-    code: ['KeyR', 'KeyA', 'KeyC', 'KeyI', 'KeyS', 'KeyT'],
-    gif: 'docs/Eat My Ass Heavy.gif',
-    difficulty: 'racist',
-    keyOrder: ['A', 'S', 'D', 'F']
+  heavyass: {
+    code: ['KeyT', 'KeyF', 'KeyT', 'KeyW', 'KeyE', 'KeyR', 'KeyK'],
+    gif: 'docs/Eat My Ass Heavy.mp4',
+    audioFile: 'docs/Eat My Ass Heavy.mp3',
+    difficulty: 'heavyass',
+    pattern: 'a(0),f(0.42),s(0.44),a(0.48),s(2.8),d(0.42),a(0.44),fa(2.9),ds(0.42),as(0.44)',
+    keyOrder: ['A', 'S', 'D', 'F'],
+    cueSpacing: 0,
   }
 };
 
@@ -1368,9 +1371,38 @@ function unlockPootisEasterEgg() {
   showMessage('🎉 POOTIS easter egg unlocked!');
 }
 
+function unlockHeavyassEasterEgg() {
+  const eggKey = 'tftwerk';
+  const egg = KEYPRESS_EASTER_EGGS[eggKey];
+  if (unlockedKeypressEasterEggs[egg.difficulty]) return;
+
+  keypressEasterEggSequenceIndex[eggKey] = 0;
+  unlockedKeypressEasterEggs[egg.difficulty] = true;
+  setStoredKeypressEasterEggs(unlockedKeypressEasterEggs);
+  activeKeypressEasterEggs[eggKey] = true;
+  difficultyPresets[egg.difficulty] = {
+    ...difficultyPresets.noob,
+    easterEgg: eggKey,
+    gifFile: egg.gif,
+    audioFile: egg.audioFile,
+    pattern: egg.pattern,
+    keyOrder: egg.keyOrder,
+    cueSpacing: egg.cueSpacing,
+    timingOffset: egg.timingOffset
+  };
+  updateDifficultyOptions();
+  // Ensure easter egg is usable immediately
+  demoGifUnlocked = true;
+  try { showDemoGifIfUnlocked(); } catch (e) {}
+  if (typeof difficultySelect !== 'undefined' && difficultySelect) {
+    difficultySelect.value = egg.difficulty;
+  }
+  showMessage('🎉 HEAVYASS easter egg unlocked!');
+}
+
 function handleKeypressEasterEggCode(keyCode) {
-  // Only process if demoman easter egg is unlocked
-  if (!demoGifUnlocked) return;
+  // Only process if the demo gif is unlocked and the cursor is hovering it.
+  if (!demoGifUnlocked || !spinningHeavyHoverActive) return;
   
   // Detect auto-clicker usage
   detectAutoClicker(keyCode);
