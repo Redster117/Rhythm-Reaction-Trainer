@@ -92,8 +92,8 @@ let spinningHeavyOverlay = null;
 let spinningHeavyAudio = null;
 const spinningHeavyOpenSequence = ['KeyT','KeyW','KeyO','KeyF','KeyO','KeyR','KeyT'];
 
-// GIF preload cache for faster loading
-let gifPreloadCache = {};
+// Visual preload cache for faster loading
+let visualPreloadCache = {};
 
 // Auto-clicker detection state
 let recentKeyPresses = [];
@@ -105,10 +105,10 @@ let isAutoClickerDetected = false;
 const KEYPRESS_EASTER_EGGS = {
   pootis: {
     code: ['KeyP', 'KeyO', 'KeyO', 'KeyT', 'KeyI', 'KeyS'],
-    gif: 'docs/Caked up Heavy Beat.mp4',
+    visual: 'docs/Caked up Heavy Beat.mp4',
     audioFile: 'docs/Caked up Heavy Beat.mp3',
     difficulty: 'pootis',
-    pattern: 'a(0),f(0.42),s(0.44),a(0.48),s(2.8),d(0.42),a(0.44),fa(2.9),ds(0.42),as(0.44)',
+    pattern: 'a(0),f(0.42),s(0.44),a(0.48),s(2.8),d(0.42),a(0.44),fa(2.44),ds(0.43),as(0.45)',
     keyOrder: ['A', 'S', 'D', 'F'],
     cueSpacing: 0,
     leadTime: 1.0,
@@ -116,22 +116,33 @@ const KEYPRESS_EASTER_EGGS = {
   },
   heavydance: {
     code: ['KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY', 'KeyD', 'KeyA', 'KeyN', 'KeyC', 'KeyE'],
-    gif: 'docs/Heavy Beats.gif',
-    difficulty: 'Heavy Dance',
-    keyOrder: ['A', 'S', 'D', 'F']
+    visual: 'docs/Heavy Beats.mp4',
+    audioFile: 'docs/Heavy Beats.mp3',
+    difficulty: 'heavy dance',
+    pattern: 'f(0.36),s(0.46),a(0.49),a(0.60),a(0.40),s(0.60),d(0.42),f(0.44),a(0.37),a(0.37),s(0.44),d(0.28),f(0.38),a(0.19),s(0.36), d(0.36),f(0.36),a(0.36)',
+    keyOrder: ['A', 'S', 'D', 'F'],
+    cueSpacing: 0,
+    leadTime: 1.0,
+    postCountdownDelay: 1.125,
   },
   heavybeats2: {
-    code: ['KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY', 'KeyB', 'KeyE', 'KeyA', 'KeyT', 'KeyS'],
-    gif: 'docs/Heavy Beats 2.gif',
-    difficulty: 'heavybeats',
-    keyOrder: ['A', 'S', 'D', 'F']
+    code: ['KeyF', 'KeyR', 'KeyE', 'KeyA', 'KeyK', 'KeyY', 'KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY',],
+    visual: 'docs/Heavy Beats 2.mp4',
+    audioFile: 'docs/Heavy Beats 2.mp3',
+    difficulty: 'freaky heavy',
+    pattern: 'a(0),s(0.17),d(0.20),f(0.17),a(0.17),s(0.21),d(0.19),f(0.14),a(0.38),s(0.16),d(0.17),f(0.18),a(0.18),s(0.18),d(0.17),f(0.17),a(0.19),s(0.19),d(0.31),f(0.18),a(0.31),s(0.16),d(0.17),f(0.14),a(0.30),s(0.22),d(0.16),f(0.30),a(0.17),s(0.17),d(0.16),f(0.22),a(0.13),s(0.29),d(0.17),f(0.16),a(0.16),s(0.21),d(0.28)',
+    patternSpeed: 10,
+    keyOrder: ['A', 'S', 'D', 'F'],
+    cueSpacing: 0,
+    leadTime: 0.25,
+    postCountdownDelay: 0,
   },
   heavyass: {
     code: ['KeyT', 'KeyF', 'KeyT', 'KeyW', 'KeyE', 'KeyR', 'KeyK'],
-    gif: 'docs/Eat My Ass Heavy.mp4',
+    visual: 'docs/Eat My Ass Heavy.mp4',
     audioFile: 'docs/Eat My Ass Heavy.mp3',
     difficulty: 'heavyass',
-    pattern: 'a(0),f(0.42),s(0.44),a(0.48),s(2.8),d(0.42),a(0.44),fa(2.9),ds(0.42),as(0.44)',
+    pattern: 'a(0),a(0.10),s(0.20),as(2.48),as(0.05),df(0.10),df(3),sd(0.10), f(0.10)',
     keyOrder: ['A', 'S', 'D', 'F'],
     cueSpacing: 0,
     leadTime: 0.45,
@@ -382,11 +393,11 @@ function updateModeDescription() {
   updateDifficultyOptions();
 }
 
-function preloadEasterEggGif(gifPath) {
-  if (!gifPath || gifPreloadCache[gifPath]) return;
-  const gif = new Image();
-  gif.src = gifPath;
-  gifPreloadCache[gifPath] = gif;
+function preloadEasterEggVisual(visualPath) {
+  if (!visualPath || visualPreloadCache[visualPath]) return;
+  const visual = new Image();
+  visual.src = visualPath;
+  visualPreloadCache[visualPath] = visual;
 }
 
 function updateDifficultyOptions() {
@@ -400,8 +411,8 @@ function updateDifficultyOptions() {
     Object.keys(KEYPRESS_EASTER_EGGS).forEach(eggKey => {
       if (activeKeypressEasterEggs[eggKey]) {
         availableOptions.push(KEYPRESS_EASTER_EGGS[eggKey].difficulty);
-        // Preload GIFs for faster loading
-        preloadEasterEggGif(KEYPRESS_EASTER_EGGS[eggKey].gif);
+        // Preload visuals for faster loading
+        preloadEasterEggVisual(KEYPRESS_EASTER_EGGS[eggKey].visual);
       }
     });
   }
@@ -956,7 +967,7 @@ function showDemoGifIfUnlocked() {
       }
 
       // Known demo GIF duration (seconds). Adjust if file changes.
-      const DEMO_GIF_DURATION = 2.67;
+      const DEMO_GIF_DURATION = 0.267;
       const startTime = Date.now();
       const targetEndTime = startTime + Math.round(DEMO_GIF_DURATION * 1000);
 
@@ -1358,7 +1369,7 @@ function unlockPootisEasterEgg() {
   difficultyPresets[egg.difficulty] = {
     ...difficultyPresets.noob,
     easterEgg: eggKey,
-    gifFile: egg.gif,
+    visualFile: egg.visual,
     audioFile: egg.audioFile,
     pattern: egg.pattern,
     keyOrder: egg.keyOrder,
@@ -1389,7 +1400,7 @@ function unlockHeavyassEasterEgg() {
   difficultyPresets[egg.difficulty] = {
     ...difficultyPresets.noob,
     easterEgg: eggKey,
-    gifFile: egg.gif,
+    visualFile: egg.visual,
     audioFile: egg.audioFile,
     pattern: egg.pattern,
     keyOrder: egg.keyOrder,
@@ -1406,6 +1417,36 @@ function unlockHeavyassEasterEgg() {
     difficultySelect.value = egg.difficulty;
   }
   showMessage('🎉 HEAVYASS easter egg unlocked!');
+}
+function unlockFreakyHeavyEasterEgg() {
+  const eggKey = 'freakyheavy';
+  const egg = KEYPRESS_EASTER_EGGS[eggKey];
+  if (unlockedKeypressEasterEggs[egg.difficulty]) return;
+
+  keypressEasterEggSequenceIndex[eggKey] = 0;
+  unlockedKeypressEasterEggs[egg.difficulty] = true;
+  setStoredKeypressEasterEggs(unlockedKeypressEasterEggs);
+  activeKeypressEasterEggs[eggKey] = true;
+  difficultyPresets[egg.difficulty] = {
+    ...difficultyPresets.pro,
+    easterEgg: eggKey,
+    visualFile: egg.visual,
+    audioFile: egg.audioFile,
+    pattern: egg.pattern,
+    keyOrder: egg.keyOrder,
+    cueSpacing: egg.cueSpacing,
+    timingOffset: egg.timingOffset,
+    leadTime: egg.leadTime,
+    postCountdownDelay: egg.postCountdownDelay
+  };
+  updateDifficultyOptions();
+  // Ensure easter egg is usable immediately
+  demoGifUnlocked = true;
+  try { showDemoGifIfUnlocked(); } catch (e) {}
+  if (typeof difficultySelect !== 'undefined' && difficultySelect) {
+    difficultySelect.value = egg.difficulty;
+  }
+  showMessage('🎉 FREAKY HEAVY easter egg unlocked!');
 }
 
 function handleKeypressEasterEggCode(keyCode) {
@@ -1432,7 +1473,7 @@ function handleKeypressEasterEggCode(keyCode) {
         difficultyPresets[egg.difficulty] = {
           ...difficultyPresets.noob,
           easterEgg: eggKey,
-          gifFile: egg.gif,
+          visualFile: egg.visual,
           audioFile: egg.audioFile,
           pattern: egg.pattern,
           keyOrder: egg.keyOrder,
@@ -1735,7 +1776,7 @@ switch (selectedMode) {
       keybinds: currentKeybinds,
       onGameEnd: stopGame,
       soundEnabled: true,
-      gifFile: difficultyWithLevel.gifFile || null,
+      visualFile: difficultyWithLevel.visualFile || null,
       keyOrder: difficultyWithLevel.keyOrder || null,
       customPattern: keypressCustomPattern,
       audioFile: difficultyWithLevel.audioFile || null,

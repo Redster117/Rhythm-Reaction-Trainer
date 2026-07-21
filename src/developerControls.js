@@ -50,7 +50,7 @@ export class DeveloperControls {
     this.statsEditEnabled = localStorage.getItem('rtr-dev-stats-edit-enabled') === '1';
     this.statsOverrideSnapshot = null;
     this.statsAccessors = {};
-    this.patternMemorySpeed = Number(localStorage.getItem('rtr-dev-pattern-memory-speed') || '1');
+    this.keyPressSpeed = Number(localStorage.getItem('rtr-dev-keypress-speed') || '1');
     this.autoClickerEnabled = localStorage.getItem('rtr-dev-auto-clicker-enabled') === '1';
     this.autoClickerTarget = String(localStorage.getItem('rtr-dev-auto-clicker-target') || 'good').toLowerCase();
     this.autoClickerTarget = ['good', 'perfect'].includes(this.autoClickerTarget) ? this.autoClickerTarget : 'good';
@@ -104,10 +104,10 @@ export class DeveloperControls {
 
     // media options
     const mediaOptions = this.docsMediaAssets.map(a => `<option value="${a.key}">${a.label}</option>`).join('');
-    const patternSpeedOptions = ['0.5', '0.75', '1', '1.25', '1.5', '2']
+    const keyPressSpeedOptions = ['0.5', '0.75', '1', '1.25', '1.5', '2']
       .map((value) => {
         const numericValue = Number(value);
-        const isSelected = Number(this.patternMemorySpeed) === numericValue ? ' selected' : '';
+        const isSelected = Number(this.keyPressSpeed) === numericValue ? ' selected' : '';
         return `<option value="${value}"${isSelected}>${value}x</option>`;
       })
       .join('');
@@ -120,9 +120,9 @@ export class DeveloperControls {
       </div>
       ${patternHtml}
       <div style="margin-bottom:12px">
-        <label style="display:block;margin-bottom:4px">Pattern Memory Speed:</label>
-        <select id="dev-pattern-speed" style="width:100%;padding:6px;margin-bottom:8px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;font-size:11px;">
-          ${patternSpeedOptions}
+        <label style="display:block;margin-bottom:4px">Key Press Speed:</label>
+        <select id="dev-keypress-speed" style="width:100%;padding:6px;margin-bottom:8px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;font-size:11px;">
+          ${keyPressSpeedOptions}
         </select>
       </div>
       <div style="margin-bottom:12px">
@@ -172,8 +172,8 @@ export class DeveloperControls {
         const value = parseInt(e.target.value);
         this.updatePatternConfig(pos, value);
       }
-      if (e.target.id === 'dev-pattern-speed') {
-        this.setPatternMemorySpeed(e.target.value);
+      if (e.target.id === 'dev-keypress-speed') {
+        this.setKeyPressSpeed(e.target.value);
       }
       if (e.target.id === 'dev-media-select') {
         this.renderMediaPreview(e.target.value);
@@ -436,10 +436,10 @@ export class DeveloperControls {
     }
   }
 
-  syncPatternMemorySpeedControl() {
-    const select = document.getElementById('dev-pattern-speed');
+  syncKeyPressSpeedControl() {
+    const select = document.getElementById('dev-keypress-speed');
     if (!select) return;
-    const value = String(this.patternMemorySpeed);
+    const value = String(this.keyPressSpeed);
     const matchingOption = Array.from(select.options).find((option) => option.value === value);
     if (matchingOption) {
       select.value = value;
@@ -448,17 +448,17 @@ export class DeveloperControls {
     }
   }
 
-  setPatternMemorySpeed(speedMultiplier = 1) {
+  setKeyPressSpeed(speedMultiplier = 1) {
     const safeSpeed = Number.isFinite(Number(speedMultiplier)) ? Math.max(0.1, Number(speedMultiplier)) : 1;
-    this.patternMemorySpeed = safeSpeed;
-    this.syncPatternMemorySpeedControl();
+    this.keyPressSpeed = safeSpeed;
+    this.syncKeyPressSpeedControl();
     try {
-      localStorage.setItem('rtr-dev-pattern-memory-speed', String(safeSpeed));
+      localStorage.setItem('rtr-dev-keypress-speed', String(safeSpeed));
     } catch (err) {
-      console.warn('DeveloperControls: could not persist pattern memory speed', err);
+      console.warn('DeveloperControls: could not persist key press speed', err);
     }
 
-    if (this.gameInstance && typeof this.gameInstance.setPlaybackSpeed === 'function') {
+    if (this.gameInstance && this.gameInstance.isKeyPressMode && typeof this.gameInstance.setPlaybackSpeed === 'function') {
       this.gameInstance.setPlaybackSpeed(safeSpeed);
     }
   }
@@ -587,8 +587,8 @@ export class DeveloperControls {
     this.gameInstance = instance;
     this.updateActionButtonStates?.();
 
-    if (instance && typeof instance.setPlaybackSpeed === 'function') {
-      instance.setPlaybackSpeed(this.patternMemorySpeed);
+    if (instance && instance.isKeyPressMode && typeof instance.setPlaybackSpeed === 'function') {
+      instance.setPlaybackSpeed(this.keyPressSpeed);
     }
     if (this.autoClickerEnabled) {
       this.startAutoClickerLoop();
