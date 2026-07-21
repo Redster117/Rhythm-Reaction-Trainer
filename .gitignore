@@ -32,10 +32,6 @@ Thumbs.db
 coverage/
 htmlcov/
 
-# Static/demo assets and generated files
-docs/demo.gif
-docs/*.mp4
-
 # Misc
 *.swp
 *.tmp
