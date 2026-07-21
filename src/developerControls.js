@@ -31,8 +31,6 @@ export class DeveloperControls {
       { key: 'Caked up Heavy Beat.mp3', label: 'Caked up Heavy Beat.mp3', src: 'docs/Caked up Heavy Beat.mp3', type: 'audio' },
       { key: 'Heavy Beats.mp4', label: 'Heavy Beats.mp4', src: 'docs/Heavy Beats.mp4', type: 'video' },
       { key: 'Heavy Beats.mp3', label: 'Heavy Beats.mp3', src: 'docs/Heavy Beats.mp3', type: 'audio' },
-      { key: 'Heavy Beats 2.mp4', label: 'Heavy Beats 2.mp4', src: 'docs/Heavy Beats 2.mp4', type: 'video' },
-      { key: 'Heavy Beats 2.mp3', label: 'Heavy Beats 2.mp3', src: 'docs/Heavy Beats 2.mp3', type: 'audio' },
       { key: 'Eat My Ass Heavy.mp4', label: 'Eat My Ass Heavy.mp4', src: 'docs/Eat My Ass Heavy.mp4', type: 'video' },
       { key: 'Eat My Ass Heavy.mp3', label: 'Eat My Ass Heavy.mp3', src: 'docs/Eat My Ass Heavy.mp3', type: 'audio' },
       { key: 'thats racist.mp3', label: 'thats racist.mp3', src: 'docs/thats racist.mp3', type: 'audio' },
