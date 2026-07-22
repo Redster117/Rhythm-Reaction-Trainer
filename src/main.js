@@ -3,7 +3,7 @@ import { AudioScheduler } from './audio.js';
 import { startBeatClick } from './modes/beatclick.js';
 import startKeyPress from './modes/keypress.js';
 import startPatternMemory from './modes/patternmemoryv3.js';
-import { initDevControls } from './developerControls.js';
+import { initDevControls } from './developerConsole.js';
 
 const STORAGE_USERS = 'rtr-users-v1';
 const STORAGE_KEYBINDS = 'rtr-keybinds-v1';
