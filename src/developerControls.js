@@ -140,9 +140,6 @@ export class DeveloperControls {
         <select id="dev-media-select" style="width:100%;padding:6px;margin-bottom:8px;border-radius:4px;border:1px solid #333;background:#071226;color:#fff;font-size:11px;"><option value="">Select docs media</option>${mediaOptions}</select>
         <div id="dev-media-preview" style="background: rgba(0,0,0,0.12); border:1px solid rgba(255,255,255,0.10); border-radius:6px; min-height:120px; display:flex; align-items:center; justify-content:center; padding:10px; color:#ccc; font-size:11px;">No media selected.</div>
       </div>
-      <div style="margin-bottom:12px">
-        <label style="display:block;margin-bottom:4px">Game Controls:</label>
-        <button id="dev-reset-game" style="width:100%;padding:6px;margin-bottom:4px;background:#ffaa00;color:#071226;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">Refresh Page</button>
       </div>
       <div style="border-top:1px solid #333;padding-top:8px;"><p id="dev-activation-sequence" style="margin:0;color:#aa0000;font-size:10px;">Sequence: ${this.formatActivationSequence()} to activate</p></div>
     `;

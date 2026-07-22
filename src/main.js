@@ -1488,10 +1488,6 @@ window.addEventListener('keydown', (e) => {
     stopGame();
   }
 
-  // Check for the pootis konami shortcut first
-  // Debug log for konami sequence matching
-  // POOTIS konami removed
-
   // Check for keypress easter egg codes
   handleKeypressEasterEggCode(e.code);
 

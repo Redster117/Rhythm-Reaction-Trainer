@@ -13,10 +13,5 @@
 4. Select open in browser
 5. Type your username and press start
 
-
-
-
-References:
-- Caked up Heavy Beat: https://www.youtube.com/watch?v=e_660yeZtPk
-- Eat My Ass Heavy: https://www.youtube.com/watch?v=1HINN85kMTE
-- Heavy Beats: https://www.youtube.com/watch?v=-vUYYKQjTwU
+## How to play
+Look in the Everything about it.md for information (Does include Easter Egg Steps)
