@@ -105,10 +105,10 @@ let isAutoClickerDetected = false;
 const KEYPRESS_EASTER_EGGS = {
   pootis: {
     code: ['KeyP', 'KeyO', 'KeyO', 'KeyT', 'KeyI', 'KeyS'],
-    visual: 'docs/Caked up Heavy Beat.mp4',
-    audioFile: 'docs/Caked up Heavy Beat.mp3',
+    visual: 'docs/Heavy Beats.mp4',
+    audioFile: 'docs/Heavy Beats.mp3',
     difficulty: 'pootis',
-    pattern: 'a(0),f(0.42),s(0.44),a(0.48),s(2.8),d(0.42),a(0.44),fa(2.44),ds(0.43),as(0.45)',
+    pattern: 'a(0),f(0.42),s(0.44),a(0.48),s(2.8),d(0.42),a(0.44),fa(3.3),ds(0.43),as(0.45)',
     keyOrder: ['A', 'S', 'D', 'F'],
     cueSpacing: 0,
     leadTime: 1.0,
@@ -116,21 +116,21 @@ const KEYPRESS_EASTER_EGGS = {
   },
   heavydance: {
     code: ['KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY', 'KeyD', 'KeyA', 'KeyN', 'KeyC', 'KeyE'],
-    visual: 'docs/Heavy Beats.mp4',
-    audioFile: 'docs/Heavy Beats.mp3',
+    visual: 'docs/Heavy Beats 2.0.mp4',
+    audioFile: 'docs/Heavy Beats 2.0.mp3',
     difficulty: 'heavy dance',
-    pattern: 'd(0.36),s(0.46),f(0.49),a(0.60),d(0.40),s(0.60),f(0.42),a(0.44),d(0.37),d(0.37),s(0.44),d(0.28),a(0.38),s(0.36),d(0.36),f(0.36)',
+    pattern: 'd(0.36),s(0.46),f(0.49),a(0.60),d(0.40),s(0.60),f(0.42),a(0.44),d(0.37),d(0.37),asdf(0.44),d(0.28),a(0.38),asd(0.36),sdf(0.36),ad(0.36),adf(0.36)',
     keyOrder: ['A', 'S', 'D', 'F'],
     cueSpacing: 0,
     leadTime: 0.96,
     postCountdownDelay: 1.125,
   },
-  heavyass: {
-    code: ['KeyT', 'KeyF', 'KeyT', 'KeyW', 'KeyE', 'KeyR', 'KeyK'],
-    visual: 'docs/Eat My Ass Heavy.mp4',
-    audioFile: 'docs/Eat My Ass Heavy.mp3',
-    difficulty: 'heavyass',
-    pattern: 'a(0),a(0.10),s(0.20),as(2.48),as(0.05),df(0.10),df(3),sd(0.10), f(0.10)',
+  heavyweaponsguy: {
+    code: ['KeyH', 'KeyE', 'KeyA', 'KeyV', 'KeyY', 'KeyW', 'KeyE', 'KeyA', 'KeyP', 'KeyO', 'KeyN', 'KeyS', 'KeyG', 'KeyU', 'KeyY'],
+    visual: 'docs/Heavy Beats 3.0.mp4',
+    audioFile: 'docs/Heavy Beats 3.0.mp3',
+    difficulty: 'heavyweaponsguy',
+    pattern: 'a(0),ad(0.10),s(0.20),as(2.55),as(0.15),df(0.15),df(2.8),sd(0.10), f(0.20)',
     keyOrder: ['A', 'S', 'D', 'F'],
     cueSpacing: 0,
     leadTime: 0.45,
@@ -1358,8 +1358,8 @@ function unlockPootisEasterEgg() {
   showMessage('🎉 POOTIS easter egg unlocked!');
 }
 
-function unlockHeavyassEasterEgg() {
-  const eggKey = 'heavyass';
+function unlockHeavyweaponsguyEasterEgg() {
+  const eggKey = 'heavyweaponsguy';
   const egg = KEYPRESS_EASTER_EGGS[eggKey];
   if (unlockedKeypressEasterEggs[egg.difficulty]) return;
 
@@ -1386,7 +1386,7 @@ function unlockHeavyassEasterEgg() {
   if (typeof difficultySelect !== 'undefined' && difficultySelect) {
     difficultySelect.value = egg.difficulty;
   }
-  showMessage('🎉 HEAVYASS easter egg unlocked!');
+  showMessage('🎉 HEAVY WEAPONS GUY easter egg unlocked!');
 }
 
 function handleKeypressEasterEggCode(keyCode) {

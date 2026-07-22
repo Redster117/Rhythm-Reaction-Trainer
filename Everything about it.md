@@ -103,15 +103,16 @@
 
      * POOTS
      * HEAVYDANCE
-     * TFTWERK
+     * HEAVYWEAPONSGUY
   3. Go to Key Press mode
   4. Change the difficulty to what's under pro.
   * WARNING: May experience lag and buffering; restart the game mode (not refresh) to fix the issue (requires good WIFI for better gameplay)
 
   * References:
-    - Caked up Heavy Beat: https://youtu.be/e_660yeZtPk?t=9
-    - Heavy Beats: https://youtu.be/-vUYYKQjTwU?t=5
-    - Eat My Ass Heavy: https://www.youtube.com/watch?v=1HINN85kMTE
+    - Heavy Beats: https://youtu.be/e_660yeZtPk?t=9
+    - Heavy Beats 2.0: https://youtu.be/-vUYYKQjTwU?t=5
+    - Heavy Beats 3.0: https://www.youtube.com/watch?v=1HINN85kMTE
+      - WARNING: Heavy Beats 3.0 has profanity, play the easter egg at your own risk
 
 
 

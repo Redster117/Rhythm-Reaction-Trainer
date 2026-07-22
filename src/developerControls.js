@@ -23,16 +23,16 @@ export class DeveloperControls {
       { key: 'demo.gif', label: 'demo.gif', src: 'docs/demo.gif', type: 'image' },
       { key: 'kazotsky kick demoman.gif', label: 'kazotsky kick demoman.gif', src: 'docs/kazotsky kick demoman.gif', type: 'image' },
       { key: 'spinning heavy.gif', label: 'spinning heavy.gif', src: 'docs/spinning heavy.gif', type: 'image' },
-      { key: 'Caked up Heavy Beat.mp4', label: 'Caked up Heavy Beat.mp4', src: 'docs/Caked up Heavy Beat.mp4', type: 'video' },
-      { key: 'Caked up Heavy Beat.mp3', label: 'Caked up Heavy Beat.mp3', src: 'docs/Caked up Heavy Beat.mp3', type: 'audio' },
+      { key: 'spinning heavy audio.mp3', label: 'spinning heavy audio.mp3', src: 'docs/spinning heavy audio.mp3', type: 'audio' },
       { key: 'Heavy Beats.mp4', label: 'Heavy Beats.mp4', src: 'docs/Heavy Beats.mp4', type: 'video' },
       { key: 'Heavy Beats.mp3', label: 'Heavy Beats.mp3', src: 'docs/Heavy Beats.mp3', type: 'audio' },
-      { key: 'Eat My Ass Heavy.mp4', label: 'Eat My Ass Heavy.mp4', src: 'docs/Eat My Ass Heavy.mp4', type: 'video' },
-      { key: 'Eat My Ass Heavy.mp3', label: 'Eat My Ass Heavy.mp3', src: 'docs/Eat My Ass Heavy.mp3', type: 'audio' },
+      { key: 'Heavy Beats 2.0.mp4', label: 'Heavy Beats 2.0.mp4', src: 'docs/Heavy Beats 2.0.mp4', type: 'video' },
+      { key: 'Heavy Beats 2.0.mp3', label: 'Heavy Beats 2.0.mp3', src: 'docs/Heavy Beats 2.0.mp3', type: 'audio' },
+      { key: 'Heavy Beats 3.0.mp4', label: 'Heavy Beats 3.0.mp4', src: 'docs/Heavy Beats 3.0.mp4', type: 'video' },
+      { key: 'Heavy Beats 3.0.mp3', label: 'Heavy Beats 3.0.mp3', src: 'docs/Heavy Beats 3.0.mp3', type: 'audio' },
       { key: 'thats racist.mp3', label: 'thats racist.mp3', src: 'docs/thats racist.mp3', type: 'audio' },
       { key: 'demo resound.mp3', label: 'demo resound.mp3', src: 'docs/demo resound.mp3', type: 'audio' },
       { key: 'demo old sound.mp3', label: 'demo old sound.mp3', src: 'docs/demo old sound.mp3', type: 'audio' },
-      { key: 'spinning heavy audio.mp3', label: 'spinning heavy audio.mp3', src: 'docs/spinning heavy audio.mp3', type: 'audio' },
     ];
 
     this.isActive = false;
