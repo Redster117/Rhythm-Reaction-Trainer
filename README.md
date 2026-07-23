@@ -1,6 +1,6 @@
 # Rhythm-Reaction-Trainer
 
-### How to run (local)
+### How to run via a local alternative (Doesn't require administator access)
 1. Create a copy of the Rhythm Reaction Trainer.
 2. Open terminal and type the commands in order:
     - npm install -g serve
@@ -10,7 +10,7 @@
 4. Select open in browser
 ##
 
-### How to run (zip)
+### How to run using the zip alternative (Requires administrator access)
 1. Download the codespace as a zip folder
 2. Extract the folder
 3. In order to run the repo, you must have Node.js® downloaded with v24.18.0, recommend using LTS. Link provided: https://nodejs.org/en/download
