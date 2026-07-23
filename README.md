@@ -1,18 +1,26 @@
 # Rhythm-Reaction-Trainer
 
-### Before you start
-1. You can't download the zip file, as it is not built as an app but rather a web.
-##
 ### How to run (local)
 1. Create a copy of the Rhythm Reaction Trainer.
 2. Open terminal and type the commands in order:
     - npm install -g serve
     - npm fund (Optional)
     - serve . -l 8000 (it is an L not a one)
-3. Once done you will get a notification saying "Your application running on port 8000 is available
+3. Once done you will get a notification saying "Your application running on port 8000 is available"
 4. Select open in browser
-5. Type your username and press start
 ##
+
+### How to run (zip)
+1. Download the codespace as a zip folder
+2. Extract the folder
+3. In order to run the repo, you must have Node.js® downloaded with v24.18.0, recommend using LTS. Link provided: https://nodejs.org/en/download
+- IMPORTANT: You don't need Chocolatey
+4. Go into the folder where you see the files.
+5. Type cmd in the address bar (just replace what's already in the address bar with cmd only).
+6. Press enter
+7. Input the same commands from Local Step 2 above.
+8. Instead of a pop up notification, you will need to click the given two links (both works fine).
+
 # How to play
 ### Features:
 
