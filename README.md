@@ -100,11 +100,6 @@
   * WARNING: May cause loss of actual stats and may reset to 0.
 * Tile Previews are used to preview the pattern guide for each tile with built-in visual hitboxes.
 * Media Previewer allows the user to watch any used media from this game (e.g. gif, mp3, mp4, png)
-* Game Controls:
-
-  * Refresh Page is for people who don't know what Ctrl + R does
-
-    * It used to test the dev console still being able to open even after a refresh.
 * To close the dev console, retype the Konami sequence.
 
 
